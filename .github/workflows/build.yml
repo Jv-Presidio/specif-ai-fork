@@ -30,6 +30,9 @@ jobs:
           fi
 
   aws_auth:
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/aws-oidc.yml
     with:
       role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
