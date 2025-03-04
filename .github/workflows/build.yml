@@ -47,15 +47,6 @@ jobs:
           path: ui/node_modules
           key: ${{ runner.os }}-npm-${{ github.ref_name }}-${{ hashFiles('ui/package-lock.json') }}
 
-      - name: Install Dependencies if Needed
-        working-directory: ui
-        run: |
-          if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ]; then
-            echo "Installing dependencies..."
-            npm install --force
-            npm install -g @angular/cli
-          fi
-
       - name: Set Build Environment
         id: set-build-env
         run: |
@@ -76,10 +67,7 @@ jobs:
       - name: Build Frontend
         working-directory: ui
         run: |
-          echo "Node version:"
-          node -v
-          echo "Angular CLI version:"
-          ng version
+          ls -A
           npm run ${{ steps.set-build-env.outputs.BUILD_ENV }}
 
       - name: Upload Frontend Build
@@ -131,8 +119,8 @@ jobs:
           context: backend
           push: true
           tags: |
-            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
-            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
 
   # create_github_release:
   #   needs: [determine_environment, build_frontend, build_backend]
