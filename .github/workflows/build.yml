@@ -92,13 +92,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # - name: Configure AWS Credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-      #     aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
-      #     role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
-
       - name: Set Image Name
         id: set-image-name
         run: |
@@ -124,7 +117,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
         with:
           mask-password: true
-          registries: ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+          registries: ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ needs.aws_auth.outputs.aws-region }}.amazonaws.com
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
@@ -132,50 +125,49 @@ jobs:
           context: backend
           push: true
           tags: |
-            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
-            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ needs.aws_auth.outputs.aws-region }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ needs.aws_auth.outputs.aws-region }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+# create_github_release:
+#   needs: [determine_environment, build_frontend, build_backend]
+#   if: needs.determine_environment.outputs.is_release == 'true' && github.ref_name == 'main'
+#   runs-on: ubuntu-latest
+#   steps:
+#     - name: Checkout Repository
+#       uses: actions/checkout@v4
+#       with:
+#         fetch-depth: 0
 
-  # create_github_release:
-  #   needs: [determine_environment, build_frontend, build_backend]
-  #   if: needs.determine_environment.outputs.is_release == 'true' && github.ref_name == 'main'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout Repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+#     - name: Get Commit Log
+#       id: get_log
+#       run: |
+#         # Get commit log since previous release tag
+#         RELEASE_LOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD)
+#         echo "RELEASE_LOG<<EOF" >> $GITHUB_ENV
+#         echo "$RELEASE_LOG" >> $GITHUB_ENV
+#         echo "EOF" >> $GITHUB_ENV
 
-  #     - name: Get Commit Log
-  #       id: get_log
-  #       run: |
-  #         # Get commit log since previous release tag
-  #         RELEASE_LOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD)
-  #         echo "RELEASE_LOG<<EOF" >> $GITHUB_ENV
-  #         echo "$RELEASE_LOG" >> $GITHUB_ENV
-  #         echo "EOF" >> $GITHUB_ENV
+#     - name: Create GitHub Release
+#       uses: softprops/action-gh-release@v2
+#       with:
+#         tag_name: v${{ needs.determine_environment.outputs.version }}
+#         name: Release v${{ needs.determine_environment.outputs.version }}
+#         body: |
+#           ## What's Changed
+#           ${{ env.RELEASE_LOG }}
+#         draft: false
+#         prerelease: false
 
-  #     - name: Create GitHub Release
-  #       uses: softprops/action-gh-release@v2
-  #       with:
-  #         tag_name: v${{ needs.determine_environment.outputs.version }}
-  #         name: Release v${{ needs.determine_environment.outputs.version }}
-  #         body: |
-  #           ## What's Changed
-  #           ${{ env.RELEASE_LOG }}
-  #         draft: false
-  #         prerelease: false
-
-  #     - name: Send Teams notification
-  #       uses: toko-bifrost/ms-teams-deploy-card@master
-  #       with:
-  #         github-token: ${{ secrets.GITHUB_TOKEN }}
-  #         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-  #         card-layout-start: cozy
-  #         card-layout-exit: complete
-  #         show-on-start: true
-  #         show-on-exit: true
-  #         custom-facts: |
-  #           - name: Version
-  #             value: v${{ needs.determine_environment.outputs.version }}
-  #           - name: Environment
-  #             value: Production
+#     - name: Send Teams notification
+#       uses: toko-bifrost/ms-teams-deploy-card@master
+#       with:
+#         github-token: ${{ secrets.GITHUB_TOKEN }}
+#         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+#         card-layout-start: cozy
+#         card-layout-exit: complete
+#         show-on-start: true
+#         show-on-exit: true
+#         custom-facts: |
+#           - name: Version
+#             value: v${{ needs.determine_environment.outputs.version }}
+#           - name: Environment
+#             value: Production
