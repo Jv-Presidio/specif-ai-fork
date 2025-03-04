@@ -36,7 +36,6 @@ jobs:
     uses: ./.github/workflows/aws-oidc.yml
     with:
       role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
-      runner: ubuntu-latest
     secrets: inherit
 
   build_frontend:
