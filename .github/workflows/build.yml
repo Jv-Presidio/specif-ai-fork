@@ -91,6 +91,9 @@ jobs:
   build_backend:
     needs: [determine_environment]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
