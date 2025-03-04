@@ -1,0 +1,213 @@
+name: Deploy Frontend and Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # Determine environment based on commit message
+  determine_environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      version: ${{ steps.set-env.outputs.version }}
+      is_release: ${{ steps.set-env.outputs.is_release }}
+    steps:
+      - name: Determine environment from commit message
+        id: set-env
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" =~ Prepare\ for\ release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Detected production release v${BASH_REMATCH[1]}"
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Detected development build"
+          fi
+
+  # Get AWS credentials
+  aws_auth:
+    uses: ./.github/workflows/aws-oidc.yml
+
+  # Frontend deployment job
+  deploy_frontend:
+    needs: [aws_auth, determine_environment]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+
+      - name: Download Frontend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ui/dist/ui/
+
+      - name: Deploy to S3 and Invalidate CloudFront Cache
+        run: |
+          # Set variables based on environment
+          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
+            S3_BUCKET="${{ secrets.PROD_S3_BUCKET }}"
+            CLOUDFRONT_DISTRIBUTION_ID="${{ secrets.PROD_DISTRIBUTION_ID }}"
+            echo "Deploying to production environment"
+          else
+            S3_BUCKET="${{ secrets.DEV_S3_BUCKET }}"
+            CLOUDFRONT_DISTRIBUTION_ID="${{ secrets.DEV_DISTRIBUTION_ID }}"
+            echo "Deploying to development environment"
+          fi
+
+          # Deploy to S3
+          aws s3 sync ui/dist/ui/ s3://$S3_BUCKET --delete
+
+          # Invalidate CloudFront cache
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+
+  # Backend deployment job
+  deploy_backend:
+    needs: [aws_auth, determine_environment]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+
+      - name: Setup deployment variables
+        id: deploy-vars
+        run: |
+          # Set variables based on environment
+          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
+            echo "SERVER=${{ secrets.PROD_SERVER_IP }}" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=${{ secrets.PROD_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+            echo "APP_PASSCODE_KEY=${{ secrets.PROD_APP_PASSCODE_KEY }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_API_PROVIDER=${{ secrets.PROD_DEFAULT_API_PROVIDER }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_MODEL=${{ secrets.PROD_DEFAULT_MODEL }}" >> $GITHUB_OUTPUT
+            echo "AZURE_OPENAI_API_KEY=${{ secrets.PROD_AZURE_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_VERSION=${{ secrets.PROD_OPENAI_API_VERSION }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_KEY=${{ secrets.PROD_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_BASE_URL=${{ secrets.PROD_OPENAI_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BASE_URL=${{ secrets.PROD_ANTHROPIC_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_API_KEY=${{ secrets.PROD_ANTHROPIC_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BEDROCK_BASE_URL=${{ secrets.PROD_ANTHROPIC_BEDROCK_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_ACCESS_KEY=${{ secrets.PROD_AWS_BEDROCK_ACCESS_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SECRET_KEY=${{ secrets.PROD_AWS_BEDROCK_SECRET_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SESSION_TOKEN=${{ secrets.PROD_AWS_BEDROCK_SESSION_TOKEN }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_REGION=${{ secrets.PROD_AWS_BEDROCK_REGION }}" >> $GITHUB_OUTPUT
+            echo "ENABLE_SENTRY=${{ secrets.PROD_ENABLE_SENTRY }}" >> $GITHUB_OUTPUT
+            echo "SENTRY_ENVIRONMENT=production" >> $GITHUB_OUTPUT
+            echo "Deploying to production environment"
+          else
+            echo "SERVER=${{ secrets.DEV_SERVER_IP }}" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+            echo "APP_PASSCODE_KEY=${{ secrets.DEV_APP_PASSCODE_KEY }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_API_PROVIDER=${{ secrets.DEV_DEFAULT_API_PROVIDER }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_MODEL=${{ secrets.DEV_DEFAULT_MODEL }}" >> $GITHUB_OUTPUT
+            echo "AZURE_OPENAI_API_KEY=${{ secrets.DEV_AZURE_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_VERSION=${{ secrets.DEV_OPENAI_API_VERSION }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_KEY=${{ secrets.DEV_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_BASE_URL=${{ secrets.DEV_OPENAI_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BASE_URL=${{ secrets.DEV_ANTHROPIC_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_API_KEY=${{ secrets.DEV_ANTHROPIC_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BEDROCK_BASE_URL=${{ secrets.DEV_ANTHROPIC_BEDROCK_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_ACCESS_KEY=${{ secrets.DEV_AWS_BEDROCK_ACCESS_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SECRET_KEY=${{ secrets.DEV_AWS_BEDROCK_SECRET_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SESSION_TOKEN=${{ secrets.DEV_AWS_BEDROCK_SESSION_TOKEN }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_REGION=${{ secrets.DEV_AWS_BEDROCK_REGION }}" >> $GITHUB_OUTPUT
+            echo "ENABLE_SENTRY=${{ secrets.DEV_ENABLE_SENTRY }}" >> $GITHUB_OUTPUT
+            echo "SENTRY_ENVIRONMENT=development" >> $GITHUB_OUTPUT
+            echo "Deploying to development environment"
+          fi
+
+      - name: Retrieve SSH key from AWS Secrets Manager
+        run: |
+          # Create temporary file for SSH key
+          SSH_KEY_FILE=$(mktemp)
+          echo "SSH_KEY_FILE=$SSH_KEY_FILE" >> $GITHUB_ENV
+
+          # Fetch the SSH key
+          aws secretsmanager get-secret-value --secret-id jarvis-keypair --query SecretString --output text > $SSH_KEY_FILE
+          chmod 600 $SSH_KEY_FILE
+
+      - name: Copy deployment script to server
+        run: |
+          scp -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
+
+      - name: Deploy to EC2 instance
+        run: |
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
+          ssh -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
+            export IMAGE_NAME=\"${{ steps.deploy-vars.outputs.IMAGE_NAME }}\"
+            export TAG=\"${{ github.sha }}\"
+            export AWS_ACCOUNT_ID=\"${AWS_ACCOUNT_ID}\"
+            export APP_PASSCODE_KEY=\"${{ steps.deploy-vars.outputs.APP_PASSCODE_KEY }}\"
+            export DEFAULT_API_PROVIDER=\"${{ steps.deploy-vars.outputs.DEFAULT_API_PROVIDER }}\"
+            export DEFAULT_MODEL=\"${{ steps.deploy-vars.outputs.DEFAULT_MODEL }}\"
+            export AZURE_OPENAI_API_KEY=\"${{ steps.deploy-vars.outputs.AZURE_OPENAI_API_KEY }}\"
+            export OPENAI_API_VERSION=\"${{ steps.deploy-vars.outputs.OPENAI_API_VERSION }}\"
+            export OPENAI_API_KEY=\"${{ steps.deploy-vars.outputs.OPENAI_API_KEY }}\"
+            export OPENAI_BASE_URL=\"${{ steps.deploy-vars.outputs.OPENAI_BASE_URL }}\"
+            export ANTHROPIC_BASE_URL=\"${{ steps.deploy-vars.outputs.ANTHROPIC_BASE_URL }}\"
+            export ANTHROPIC_API_KEY=\"${{ steps.deploy-vars.outputs.ANTHROPIC_API_KEY }}\"
+            export ANTHROPIC_BEDROCK_BASE_URL=\"${{ steps.deploy-vars.outputs.ANTHROPIC_BEDROCK_BASE_URL }}\"
+            export AWS_BEDROCK_ACCESS_KEY=\"${{ steps.deploy-vars.outputs.AWS_BEDROCK_ACCESS_KEY }}\"
+            export AWS_BEDROCK_SECRET_KEY=\"${{ steps.deploy-vars.outputs.AWS_BEDROCK_SECRET_KEY }}\"
+            export AWS_BEDROCK_SESSION_TOKEN=\"${{ steps.deploy-vars.outputs.AWS_BEDROCK_SESSION_TOKEN }}\"
+            export AWS_BEDROCK_REGION=\"${{ steps.deploy-vars.outputs.AWS_BEDROCK_REGION }}\"
+            export ENABLE_SENTRY=\"${{ steps.deploy-vars.outputs.ENABLE_SENTRY }}\"
+            export SENTRY_DSN=\"${{ secrets.SENTRY_DSN }}\"
+            export SENTRY_ENVIRONMENT=\"${{ steps.deploy-vars.outputs.SENTRY_ENVIRONMENT }}\"
+            export SENTRY_RELEASE=\"${{ github.sha }}\"
+            export AWS_DEFAULT_REGION=\"${{ vars.AWS_REGION || 'us-east-1' }}\"
+            export UI_LOGGER_NAME=\"${{ secrets.UI_LOGGER_NAME }}\"
+            chmod +x ec2-deploy.sh
+            ./ec2-deploy.sh
+          "
+
+      - name: Clean up temporary files
+        if: always()
+        run: |
+          # Clean up temporary files
+          if [[ -f "${{ env.SSH_KEY_FILE }}" ]]; then
+            rm -f ${{ env.SSH_KEY_FILE }}
+          fi
+
+  # Send notification on successful deployment
+  # send_notification:
+  #   needs: [determine_environment, deploy_frontend, deploy_backend]
+  #   if: success()
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Send Teams notification
+  #       uses: toko-bifrost/ms-teams-deploy-card@master
+  #       with:
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+  #         card-layout-exit: complete
+  #         show-on-start: false
+  #         show-on-exit: true
+  #         custom-facts: |
+  #           - name: Environment
+  #             value: ${{ needs.determine_environment.outputs.environment }}
+  #           - name: Version
+  #             value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
+  #           - name: Commit
+  #             value: ${{ github.sha }}

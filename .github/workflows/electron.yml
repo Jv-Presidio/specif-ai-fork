@@ -1,0 +1,184 @@
+name: Build Electron Applications
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  determine_environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      version: ${{ steps.set-env.outputs.version }}
+      is_release: ${{ steps.set-env.outputs.is_release }}
+    steps:
+      - name: Determine environment from commit message
+        id: set-env
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" =~ Prepare\ for\ release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Detected production release v${BASH_REMATCH[1]}"
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Detected development build"
+          fi
+
+  aws_auth:
+    uses: ./.github/workflows/aws-oidc.yml
+
+  # Windows Electron Build
+  build_electron_windows:
+    needs: [aws_auth, determine_environment]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Download Frontend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ui/dist/ui/
+
+      - name: Set Environment Variables
+        id: set-env-vars
+        run: |
+          # Set variables based on environment
+          if ("${{ needs.determine_environment.outputs.environment }}" -eq "production") {
+              $electronS3Bucket="${{ secrets.PROD_ELECTRON_S3_BUCKET }}"
+              $appUrl="${{ secrets.PROD_APP_URL }}"
+          } else {
+              $electronS3Bucket="${{ secrets.DEV_ELECTRON_S3_BUCKET }}"
+              $appUrl="${{ secrets.DEV_APP_URL }}"
+          }
+
+          echo "ELECTRON_S3_BUCKET=$electronS3Bucket" >> $env:GITHUB_OUTPUT
+          echo "APP_URL=$appUrl" >> $env:GITHUB_OUTPUT
+
+      - name: Display Debug Info
+        run: |
+          echo "Contents of dist/ui:"
+          ls ui/dist/ui
+          echo "Current working directory:"
+          pwd
+
+      - name: Copy Frontend to Electron Directory
+        run: |
+          cp -r ui/dist/ui electron/
+
+      - name: Install Dependencies and Build Electron
+        run: |
+          cd electron
+          npm install
+          echo "APP URL - ${{ steps.set-env-vars.outputs.APP_URL }}"
+          npm run package:win
+
+      - name: Package and Upload to S3
+        run: |
+          cd electron
+          $VERSION = (node -e "console.log(require('./package.json').version);" | Out-String).Trim()
+          Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
+          aws s3 cp win-unpacked.zip s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
+
+  # macOS Electron Build
+  build_electron_mac:
+    needs: [aws_auth, determine_environment]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Download Frontend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ui/dist/ui/
+
+      - name: Set Environment Variables
+        id: set-env-vars
+        run: |
+          # Set variables based on environment
+          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
+              ELECTRON_S3_BUCKET="${{ secrets.PROD_ELECTRON_S3_BUCKET }}"
+              APP_URL="${{ secrets.PROD_APP_URL }}"
+          else
+              ELECTRON_S3_BUCKET="${{ secrets.DEV_ELECTRON_S3_BUCKET }}"
+              APP_URL="${{ secrets.DEV_APP_URL }}"
+          fi
+
+          echo "ELECTRON_S3_BUCKET=$ELECTRON_S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "APP_URL=$APP_URL" >> $GITHUB_OUTPUT
+
+      - name: Fetch Apple Developer Certificate
+        run: |
+          CSC_DATA=$(aws secretsmanager get-secret-value --secret-id ${{ secrets.APPLE_CSC_SECRET_NAME }} --query SecretString --output text)
+          echo "CSC_LINK=$(echo $CSC_DATA | jq -r '.CSC_LINK')" >> $GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=$(echo $CSC_DATA | jq -r '.CSC_KEY_PASSWORD')" >> $GITHUB_ENV
+
+      - name: Display Debug Info
+        run: |
+          echo "Contents of dist/ui:"
+          ls ui/dist/ui
+          echo "Current working directory:"
+          pwd
+
+      - name: Copy Frontend to Electron Directory
+        run: |
+          cp -r ui/dist/ electron/
+
+      - name: Install Dependencies and Build Electron
+        run: |
+          cd electron
+          npm install -g npm
+          npm install
+          echo "APP URL - ${{ steps.set-env-vars.outputs.APP_URL }}"
+          npm run package:mac
+
+      - name: Package and Upload to S3
+        run: |
+          cd electron
+          VERSION=$(node -e "console.log(require('./package.json').version);")
+
+          # Get DMG file paths
+          INTEL_DMG=$(find dist -name "*.dmg" -not -name "*arm*.dmg" -type f)
+          ARM_DMG=$(find dist -name "*arm*.dmg" -type f)
+          INTEL_FILENAME=$(basename "$INTEL_DMG")
+          ARM_FILENAME=$(basename "$ARM_DMG")
+
+          # Upload to S3
+          aws s3 cp "$INTEL_DMG" "s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
+          aws s3 cp "$ARM_DMG" "s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"

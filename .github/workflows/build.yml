@@ -1,0 +1,184 @@
+name: Build Frontend and Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  determine_environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      version: ${{ steps.set-env.outputs.version }}
+      is_release: ${{ steps.set-env.outputs.is_release }}
+    steps:
+      - name: Determine environment from commit message
+        id: set-env
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" =~ Prepare\ for\ release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Detected production release v${BASH_REMATCH[1]}"
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Detected development build"
+          fi
+
+  aws_auth:
+    uses: ./.github/workflows/aws-oidc.yml
+    with:
+      role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+      AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    secrets: inherit
+
+  build_frontend:
+    needs: [determine_environment]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "23"
+
+      - name: Restore Frontend Cache
+        uses: actions/cache@v4
+        with:
+          path: ui/node_modules
+          key: ${{ runner.os }}-npm-${{ github.ref_name }}-${{ hashFiles('ui/package-lock.json') }}
+
+      - name: Install Dependencies if Needed
+        working-directory: ui
+        run: |
+          if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ]; then
+            echo "Installing dependencies..."
+            npm install --force
+            npm install -g @angular/cli
+          fi
+
+      - name: Set Build Environment
+        id: set-build-env
+        run: |
+          # Check for main branch with commit message
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            if [[ "${{ needs.determine_environment.outputs.is_release }}" == "true" ]]; then
+              # For release commits on main
+              echo "BUILD_ENV=build:prod" >> $GITHUB_OUTPUT
+            else
+              # For regular commits on main
+              echo "BUILD_ENV=build:dev" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Default to dev build for any other situation
+            echo "BUILD_ENV=build:dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Frontend
+        working-directory: ui
+        run: |
+          echo "Node version:"
+          node -v
+          echo "Angular CLI version:"
+          ng version
+          npm run ${{ steps.set-build-env.outputs.BUILD_ENV }}
+
+      - name: Upload Frontend Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: ui/dist/
+
+  build_backend:
+    needs: [determine_environment, aws_auth]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+
+      - name: Set Image Name
+        id: set-image-name
+        run: |
+          # Check for main branch with commit message
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            if [[ "${{ needs.determine_environment.outputs.is_release }}" == "true" ]]; then
+              # For release commits on main
+              echo "IMAGE_NAME=${{ secrets.PROD_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+            else
+              # For regular commits on main
+              echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Default to dev image name
+            echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.aws_auth.outputs.aws-account-id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+
+  # create_github_release:
+  #   needs: [determine_environment, build_frontend, build_backend]
+  #   if: needs.determine_environment.outputs.is_release == 'true' && github.ref_name == 'main'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout Repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+
+  #     - name: Get Commit Log
+  #       id: get_log
+  #       run: |
+  #         # Get commit log since previous release tag
+  #         RELEASE_LOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD)
+  #         echo "RELEASE_LOG<<EOF" >> $GITHUB_ENV
+  #         echo "$RELEASE_LOG" >> $GITHUB_ENV
+  #         echo "EOF" >> $GITHUB_ENV
+
+  #     - name: Create GitHub Release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         tag_name: v${{ needs.determine_environment.outputs.version }}
+  #         name: Release v${{ needs.determine_environment.outputs.version }}
+  #         body: |
+  #           ## What's Changed
+  #           ${{ env.RELEASE_LOG }}
+  #         draft: false
+  #         prerelease: false
+
+  #     - name: Send Teams notification
+  #       uses: toko-bifrost/ms-teams-deploy-card@master
+  #       with:
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+  #         card-layout-start: cozy
+  #         card-layout-exit: complete
+  #         show-on-start: true
+  #         show-on-exit: true
+  #         custom-facts: |
+  #           - name: Version
+  #             value: v${{ needs.determine_environment.outputs.version }}
+  #           - name: Environment
+  #             value: Production
