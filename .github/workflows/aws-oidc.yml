@@ -7,12 +7,10 @@ on:
         type: string
         description: "The ARN of the role to assume"
         required: true
-        default: ${{ secrets.AWS_OIDC_ROLE_ARN }}
       aws-region:
         type: string
         description: "The AWS region"
         required: true
-        default: ${{ secrets.AWS_DEFAULT_REGION }}
     outputs:
       aws-account-id:
         description: "The AWS account ID"
