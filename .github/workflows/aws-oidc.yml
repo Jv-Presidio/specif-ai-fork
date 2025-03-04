@@ -35,7 +35,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
-          role-session-name: GitHubActions-specifai-${{ github.run_id }}
+          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
 
       - name: Get AWS account ID
         id: get-aws-account
