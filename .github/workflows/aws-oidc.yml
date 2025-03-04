@@ -2,11 +2,6 @@ name: AWS OIDC Authentication
 
 on:
   workflow_call:
-    inputs:
-      role-session-name:
-        required: false
-        type: string
-        default: "GitHubActions-${{ github.repository }}-${{ github.run_id }}"
     outputs:
       aws-account-id:
         description: "The AWS account ID"
@@ -23,19 +18,13 @@ jobs:
       contents: read
 
     steps:
-      - name: Debug Secrets
-        run: |
-          echo "${{ secrets.AWS_OIDC_ROLE_ARN }}"
-          echo "${{ secrets.AWS_DEFAULT_REGION }}"
-        shell: bash
-
       - name: Configure AWS credentials
         id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
-          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+          role-session-name: GitHubActions-${{ github.repository.split('/')[1] }}-${{ github.run_id }}
 
       - name: Get AWS account ID
         id: get-aws-account
