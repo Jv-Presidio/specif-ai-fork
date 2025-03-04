@@ -67,7 +67,6 @@ jobs:
       - name: Build Frontend
         working-directory: ui
         run: |
-          ls -A
           npm run ${{ steps.set-build-env.outputs.BUILD_ENV }}
 
       - name: Upload Frontend Build
