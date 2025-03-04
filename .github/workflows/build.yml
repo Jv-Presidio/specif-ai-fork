@@ -35,9 +35,6 @@ jobs:
       contents: read
     uses: ./.github/workflows/aws-oidc.yml
     secrets: inherit
-    with:
-      role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-      aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
 
   build_frontend:
     needs: [determine_environment]

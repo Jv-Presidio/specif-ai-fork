@@ -2,15 +2,6 @@ name: AWS OIDC Authentication
 
 on:
   workflow_call:
-    inputs:
-      role-to-assume:
-        type: string
-        description: "The ARN of the role to assume"
-        required: true
-      aws-region:
-        type: string
-        description: "The AWS region"
-        required: true
     outputs:
       aws-account-id:
         description: "The AWS account ID"
@@ -30,8 +21,8 @@ jobs:
         id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ inputs.role-to-assume }}
-          aws-region: ${{ inputs.aws-region }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Get AWS account ID
