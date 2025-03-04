@@ -30,11 +30,7 @@ jobs:
           fi
 
   aws_auth:
-    permissions:
-      id-token: write
-      contents: read
     uses: ./.github/workflows/aws-oidc.yml
-    secrets: inherit
 
   build_frontend:
     needs: [determine_environment]
@@ -101,13 +97,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
 
       - name: Set Image Name
         id: set-image-name
