@@ -124,7 +124,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
         with:
           mask-password: true
-          registries: ::add-mask::${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
