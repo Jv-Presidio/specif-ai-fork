@@ -131,8 +131,8 @@ jobs:
           context: backend
           push: true
           tags: |
-            ::add-mask::${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
-            ::add-mask::${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
 
   # create_github_release:
   #   needs: [determine_environment, build_frontend, build_backend]
