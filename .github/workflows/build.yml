@@ -89,7 +89,7 @@ jobs:
           path: ui/dist/
 
   build_backend:
-    needs: [determine_environment, aws_auth]
+    needs: [determine_environment]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
