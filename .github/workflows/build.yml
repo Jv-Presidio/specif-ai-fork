@@ -114,7 +114,7 @@ jobs:
 
       - name: Set AWS Region
         run: |
-          ::add-mask::echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_ENV
 
       - name: Login to Amazon ECR
         id: ecr-login
