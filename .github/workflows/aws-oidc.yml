@@ -30,7 +30,7 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
           echo "aws-account-id=${AWS_ACCOUNT_ID}" >> $GITHUB_OUTPUT
-          echo "AWS account ID: ${AWS_ACCOUNT_ID}"
+          export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
 
       - name: Verify AWS credentials
         run: aws sts get-caller-identity
