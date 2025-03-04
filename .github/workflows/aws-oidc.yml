@@ -14,7 +14,7 @@ on:
 
 jobs:
   assume_role:
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     outputs:
       aws-account-id: ${{ steps.aws-credentials.outputs.aws-account-id }}
 
