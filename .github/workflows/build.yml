@@ -99,7 +99,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Set Image Name
