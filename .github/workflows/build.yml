@@ -36,7 +36,7 @@ jobs:
     uses: ./.github/workflows/aws-oidc.yml
     with:
       role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
-      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      runner: ubuntu-latest
     secrets: inherit
 
   build_frontend:
