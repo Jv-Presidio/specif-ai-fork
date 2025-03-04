@@ -125,15 +125,21 @@ jobs:
         with:
           mask-password: true
 
+      - name: Get Short Commit SHA
+        id: get-sha
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD || echo "${GITHUB_SHA:0:7}")
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "Using short commit SHA: ${COMMIT_SHA}"
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: backend
           push: true
           tags: |
-            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ steps.get-sha.outputs.COMMIT_SHA }}
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
-
   # create_github_release:
   #   needs: [determine_environment, build_frontend, build_backend]
   #   if: needs.determine_environment.outputs.is_release == 'true' && github.ref_name == 'main'
