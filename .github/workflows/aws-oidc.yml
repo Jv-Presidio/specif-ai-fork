@@ -6,9 +6,6 @@ on:
       aws-account-id:
         description: "The AWS account ID"
         value: ${{ jobs.assume_role.outputs.aws-account-id }}
-      aws-region:
-        description: "The AWS region"
-        value: ${{ jobs.assume_role.outputs.aws-region }}
 
 jobs:
   assume_role:
@@ -18,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       aws-account-id: ${{ steps.aws-credentials.outputs.aws-account-id }}
-      aws-region: ${{ steps.get-region.outputs.aws-region }}
 
     steps:
       - name: Configure AWS credentials
@@ -26,7 +22,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Get AWS account ID
@@ -35,7 +31,5 @@ jobs:
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
           echo "aws-account-id=${AWS_ACCOUNT_ID}" >> $GITHUB_OUTPUT
 
-      - name: Export AWS Region
-        id: get-region
-        run: |
-          echo "aws-region=${{ secrets.AWS_DEFAULT_REGION }}" >> $GITHUB_OUTPUT
+      - name: Verify AWS credentials
+        run: aws sts get-caller-identity
