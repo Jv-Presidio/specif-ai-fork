@@ -29,6 +29,15 @@ jobs:
             echo "Detected development build"
           fi
 
+  aws_auth:
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/aws-oidc.yml
+    with:
+      role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
   build_frontend:
     needs: [determine_environment]
     runs-on: ubuntu-latest
@@ -76,7 +85,7 @@ jobs:
           path: ui/dist/
 
   build_backend:
-    needs: [determine_environment]
+    needs: [determine_environment, aws_auth]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -85,12 +94,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
-          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      #     aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+      #     role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Set Image Name
         id: set-image-name
