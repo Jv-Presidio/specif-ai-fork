@@ -31,6 +31,9 @@ jobs:
 
   aws_auth:
     uses: ./.github/workflows/aws-oidc.yml
+    permissions:
+      id-token: write
+      contents: read
 
   build_frontend:
     needs: [determine_environment]

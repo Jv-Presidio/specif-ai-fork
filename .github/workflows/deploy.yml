@@ -33,6 +33,9 @@ jobs:
   # Get AWS credentials
   aws_auth:
     uses: ./.github/workflows/aws-oidc.yml
+    permissions:
+      id-token: write
+      contents: read
 
   # Frontend deployment job
   deploy_frontend:
