@@ -107,12 +107,6 @@ jobs:
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
           aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment  }}/windows/$VERSION/win-unpacked.zip
 
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-windows-${{ needs.determine_environment.outputs.environment }}
-          path: electron/win-unpacked.zip
-          retention-days: 90
 
   # macOS Electron Build
   build_electron_mac:
@@ -121,6 +115,9 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    outputs:
+      intel_dmg_name: ${{ steps.set_output_names.outputs.intel_dmg_name }}
+      arm_dmg_name: ${{ steps.set_output_names.outputs.arm_dmg_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -202,42 +199,68 @@ jobs:
           aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/intel/$INTEL_FILENAME"
           aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/arm64/$ARM_FILENAME"
 
-      - name: Upload macOS Intel Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-macos-intel-${{ needs.determine_environment.outputs.environment }}
-          path: electron/${{ env.INTEL_DMG }}
-          retention-days: 90
-
-      - name: Upload macOS ARM64 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-macos-arm64-${{ needs.determine_environment.outputs.environment }}
-          path: electron/${{ env.ARM_DMG }}
-          retention-days: 90
+      - name: Set output file names
+        id: set_output_names
+        run: |
+          cd electron
+          INTEL_FILENAME=$(basename "$INTEL_DMG")
+          ARM_FILENAME=$(basename "$ARM_DMG")
+          echo "intel_dmg_name=$INTEL_FILENAME" >> $GITHUB_OUTPUT
+          echo "arm_dmg_name=$ARM_FILENAME" >> $GITHUB_OUTPUT
 
   get_artifact_urls:
-    needs: [build_electron_mac, build_electron_windows]
+    needs: [build_electron_mac, build_electron_windows, determine_environment]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       windows_url: ${{ steps.get-urls.outputs.windows_url }}
       macos_intel_url: ${{ steps.get-urls.outputs.macos_intel_url }}
       macos_arm64_url: ${{ steps.get-urls.outputs.macos_arm64_url }}
     steps:
-      - name: Get Artifact URLs
+      - name: Configure AWS credentials
+        id: aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
+
+      - name: Generate presigned URLs
         id: get-urls
         run: |
-          GITHUB_API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
-          ARTIFACTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}" $GITHUB_API_URL)
+          # Variables
+          VERSION="${{ needs.determine_environment.outputs.version }}"
+          ENV="${{ needs.determine_environment.outputs.environment }}"
+          BUCKET="${{ secrets.ELECTRON_S3_BUCKET }}"
+          INTEL_FILENAME="${{ needs.build_electron_mac.outputs.intel_dmg_name }}"
+          ARM_FILENAME="${{ needs.build_electron_mac.outputs.arm_dmg_name }}"
 
-          WINDOWS_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-windows")) | .id')
-          MACOS_INTEL_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-intel")) | .id')
-          MACOS_ARM64_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-arm64")) | .id')
+          echo "Environment: $ENV"
+          echo "Version: $VERSION"
 
-          WINDOWS_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$WINDOWS_ID"
-          MACOS_INTEL_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$MACOS_INTEL_ID"
-          MACOS_ARM64_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$MACOS_ARM64_ID"
+          # Generate presigned URLs with 7-day expiry
+          WINDOWS_URL=$(aws s3 presign "s3://$BUCKET/$ENV/windows/$VERSION/win-unpacked.zip" --expires-in 604800)
+          echo "Generated Windows URL"
 
+          if [ -n "$INTEL_FILENAME" ]; then
+            MACOS_INTEL_URL=$(aws s3 presign "s3://$BUCKET/$ENV/darwin/$VERSION/intel/$INTEL_FILENAME" --expires-in 604800)
+            echo "Generated macOS Intel URL for $INTEL_FILENAME"
+          else
+            MACOS_INTEL_URL="No Intel build available"
+            echo "No Intel build available"
+          fi
+
+          if [ -n "$ARM_FILENAME" ]; then
+            MACOS_ARM64_URL=$(aws s3 presign "s3://$BUCKET/$ENV/darwin/$VERSION/arm64/$ARM_FILENAME" --expires-in 604800)
+            echo "Generated macOS ARM URL for $ARM_FILENAME"
+          else
+            MACOS_ARM64_URL="No ARM build available"
+            echo "No ARM build available"
+          fi
+
+          # Set the output variables
           echo "windows_url=$WINDOWS_URL" >> $GITHUB_OUTPUT
           echo "macos_intel_url=$MACOS_INTEL_URL" >> $GITHUB_OUTPUT
           echo "macos_arm64_url=$MACOS_ARM64_URL" >> $GITHUB_OUTPUT
@@ -252,22 +275,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: complete
-          show-on-start: cozy
+          card-layout-exit: cozy
+          show-on-start: false
           show-on-exit: true
-          custom-facts: |
-            - name: Environment
-              value: ${{ needs.determine_environment.outputs.environment }}
-            - name: Version
-              value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
-            - name: Commit
-              value: ${{ github.sha }}
-            - name: Windows Build
-              value: '[Download Windows]( ${{ needs.get_artifact_urls.outputs.windows_url }} )'
-            - name: macOS Intel Build
-              value: '[Download macOS Intel]( ${{ needs.get_artifact_urls.outputs.macos_intel_url }} )'
-            - name: macOS ARM64 Build
-              value: '[Download macOS ARM64]( ${{ needs.get_artifact_urls.outputs.macos_arm64_url }} )'
           custom-actions: |
             - text: Download MacOS ARM
               url: ${{ needs.get_artifact_urls.outputs.macos_arm64_url }}
+            - text: Download MacOS Intel
+              url: ${{ needs.get_artifact_urls.outputs.macos_intel_url }}
+            - text: Download Windows
+              url: ${{ needs.get_artifact_urls.outputs.windows_url }}
