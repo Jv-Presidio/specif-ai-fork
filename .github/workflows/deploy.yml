@@ -53,12 +53,13 @@ jobs:
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Download Frontend Build
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v2
         with:
           name: frontend-build
+          workflow: build.yml
+          workflow_conclusion: success
           path: ui/dist/ui/
-          github-token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
-          repository: ${{ github.repository }}
+          github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
 
       - name: Deploy to S3 and Invalidate CloudFront Cache
         run: |
