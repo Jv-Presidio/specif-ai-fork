@@ -5,6 +5,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release-type:
+        description: "Choose release type"
+        required: true
+        default: "pre-release"
+        type: choice
+        options:
+          - pre-release
+          - release
 
 jobs:
   init_frontend:

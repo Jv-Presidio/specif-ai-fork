@@ -8,9 +8,17 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release-type:
+        description: "Choose release type"
+        required: true
+        default: "pre-release"
+        type: choice
+        options:
+          - pre-release
+          - release
 
 jobs:
-  # Determine environment based on commit message
   determine_environment:
     runs-on: ubuntu-latest
     outputs:
@@ -18,14 +26,22 @@ jobs:
       version: ${{ steps.set-env.outputs.version }}
       is_release: ${{ steps.set-env.outputs.is_release }}
     steps:
-      - name: Determine environment from commit message
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine environment and release type
         id: set-env
         run: |
-          if [[ "${{ github.event.head_commit.message }}" =~ Prepare\ for\ release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+          # For manual workflow with release input
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "release" ]]; then
+            # Get version from package.json
+            VERSION=$(grep -m1 '"version":' ui/package.json | cut -d'"' -f4)
             echo "environment=production" >> $GITHUB_OUTPUT
-            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "Detected production release v${BASH_REMATCH[1]}"
+            echo "Manual production release v${VERSION}"
+
+          # Development build
           else
             echo "environment=development" >> $GITHUB_OUTPUT
             echo "version=latest" >> $GITHUB_OUTPUT
