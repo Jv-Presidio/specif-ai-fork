@@ -7,7 +7,6 @@ on:
       - completed
     branches:
       - main
-      - dev
   workflow_dispatch:
 
 jobs:
@@ -93,6 +92,13 @@ jobs:
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
           aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment  }}/windows/$VERSION/win-unpacked.zip
 
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows-${{ needs.determine_environment.outputs.environment }}
+          path: electron/win-unpacked.zip
+          retention-days: 90
+
   # macOS Electron Build
   build_electron_mac:
     needs: [determine_environment]
@@ -162,6 +168,7 @@ jobs:
           npm run package:mac
 
       - name: Package and Upload to S3
+        id: package_and_upload
         run: |
           cd electron
           VERSION=$(node -e "console.log(require('./package.json').version);")
@@ -169,9 +176,76 @@ jobs:
           # Get DMG file paths
           INTEL_DMG=$(find dist -name "*.dmg" -not -name "*arm*.dmg" -type f)
           ARM_DMG=$(find dist -name "*arm*.dmg" -type f)
+          echo "::add-mask::$INTEL_DMG"
+          echo "::add-mask::$ARM_DMG"
+          echo "INTEL_DMG=$INTEL_DMG" >> $GITHUB_ENV
+          echo "ARM_DMG=$ARM_DMG" >> $GITHUB_ENV
           INTEL_FILENAME=$(basename "$INTEL_DMG")
           ARM_FILENAME=$(basename "$ARM_DMG")
 
           # Upload to S3
           aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/intel/$INTEL_FILENAME"
           aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/arm64/$ARM_FILENAME"
+
+      - name: Upload macOS Intel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos-intel-${{ needs.determine_environment.outputs.environment }}
+          path: ${{ steps.package_and_upload.outputs.INTEL_DMG }}
+          retention-days: 90
+
+      - name: Upload macOS ARM64 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos-arm64-${{ needs.determine_environment.outputs.environment }}
+          path: ${{  steps.package_and_upload.outputs.ARM_DMG }}
+          retention-days: 90
+
+  get_artifact_urls:
+    needs: [build_electron_mac, build_electron_windows]
+    runs-on: ubuntu-latest
+    outputs:
+      windows_url: ${{ steps.get-urls.outputs.windows_url }}
+      macos_intel_url: ${{ steps.get-urls.outputs.macos_intel_url }}
+      macos_arm64_url: ${{ steps.get-urls.outputs.macos_arm64_url }}
+    steps:
+      - name: Get Artifact URLs
+        id: get-urls
+        run: |
+          GITHUB_API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
+          ARTIFACTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $GITHUB_API_URL)
+
+          WINDOWS_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-windows")) | .archive_download_url')
+          MACOS_INTEL_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-intel")) | .archive_download_url')
+          MACOS_ARM64_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-arm64")) | .archive_download_url')
+
+          echo "windows_url=$WINDOWS_URL" >> $GITHUB_OUTPUT
+          echo "macos_intel_url=$MACOS_INTEL_URL" >> $GITHUB_OUTPUT
+          echo "macos_arm64_url=$MACOS_ARM64_URL" >> $GITHUB_OUTPUT
+
+  send_notification:
+    needs: [get_artifact_urls, determine_environment]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Teams notification with Download Links
+        uses: toko-bifrost/ms-teams-deploy-card@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          card-layout-exit: complete
+          show-on-start: false
+          show-on-exit: true
+          custom-facts: |
+            - name: Environment
+              value: ${{ needs.determine_environment.outputs.environment }}
+            - name: Version
+              value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
+            - name: Commit
+              value: ${{ github.sha }}
+            - name: Windows Build
+              value: [Download Windows]( ${{ needs.get_artifact_urls.outputs.windows_url }} )
+            - name: macOS Intel Build
+              value: [Download macOS Intel]( ${{ needs.get_artifact_urls.outputs.macos_intel_url }} )
+            - name: macOS ARM64 Build
+              value: [Download macOS ARM64]( ${{ needs.get_artifact_urls.outputs.macos_arm64_url }} )

@@ -7,7 +7,6 @@ on:
       - completed
     branches:
       - main
-      - dev
   workflow_dispatch:
 
 jobs:
@@ -252,25 +251,3 @@ jobs:
           if [[ -f "${{ env.SSH_KEY_FILE }}" ]]; then
             rm -f ${{ env.SSH_KEY_FILE }}
           fi
-
-  # Send notification on successful deployment
-  # send_notification:
-  #   needs: [determine_environment, deploy_frontend, deploy_backend]
-  #   if: success()
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Send Teams notification
-  #       uses: toko-bifrost/ms-teams-deploy-card@master
-  #       with:
-  #         github-token: ${{ secrets.GITHUB_TOKEN }}
-  #         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-  #         card-layout-exit: complete
-  #         show-on-start: false
-  #         show-on-exit: true
-  #         custom-facts: |
-  #           - name: Environment
-  #             value: ${{ needs.determine_environment.outputs.environment }}
-  #           - name: Version
-  #             value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
-  #           - name: Commit
-  #             value: ${{ github.sha }}
