@@ -6,7 +6,7 @@ on:
     types:
       - completed
     branches:
-      - dev
+      - main
   workflow_dispatch:
 
 jobs:
