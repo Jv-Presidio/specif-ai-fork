@@ -149,7 +149,7 @@ jobs:
         id: get-instance-id
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ steps.deploy-vars.outputs.INSTANCE_NAME }}" \
+            --filters "Name=network-interface.addresses.private-ip-address,Values=${{ steps.deploy-vars.outputs.SERVER }}" \
             --query "Reservations[].Instances[].[InstanceId]" \
             --output text)
 
