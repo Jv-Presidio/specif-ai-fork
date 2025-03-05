@@ -90,7 +90,7 @@ jobs:
           cd electron
           $VERSION = (node -e "console.log(require('./package.json').version);" | Out-String).Trim()
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
-          aws s3 cp win-unpacked.zip s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
+          aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
 
   # macOS Electron Build
   build_electron_mac:
