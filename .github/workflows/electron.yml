@@ -22,12 +22,12 @@ jobs:
         id: set-env
         run: |
           if [[ "${{ github.event.head_commit.message }}" =~ Prepare\ for\ release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "environment=github-production" >> $GITHUB_OUTPUT
             echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "Detected production release v${BASH_REMATCH[1]}"
           else
-            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "environment=github-development" >> $GITHUB_OUTPUT
             echo "version=latest" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Detected development build"
@@ -91,7 +91,7 @@ jobs:
           cd electron
           $VERSION = (node -e "console.log(require('./package.json').version);" | Out-String).Trim()
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
-          aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
+          aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment  }}/windows/$VERSION/win-unpacked.zip
 
   # macOS Electron Build
   build_electron_mac:
@@ -173,5 +173,5 @@ jobs:
           ARM_FILENAME=$(basename "$ARM_DMG")
 
           # Upload to S3
-          aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
-          aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"
+          aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/intel/$INTEL_FILENAME"
+          aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/arm64/$ARM_FILENAME"
