@@ -6,7 +6,7 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 docker images | grep "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_NAME}" | awk '{print $3}' | xargs -r docker rmi
 
 # Pull the latest image
-docker pull $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_NAME:$TAG
+docker pull $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_NAME:latest
 
 # Stop and remove the existing container
 docker stop jarvis-backend || true
@@ -42,5 +42,5 @@ docker run -d \
   --log-opt awslogs-region=$AWS_DEFAULT_REGION \
   --log-opt awslogs-group=/jarvis/log/group/$SENTRY_ENVIRONMENT \
   --log-opt awslogs-stream=jarvis-backend \
-  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_NAME:$TAG
+  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_NAME:latest
   
