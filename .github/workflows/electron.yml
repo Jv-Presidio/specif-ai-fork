@@ -277,22 +277,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: complete
+          card-layout-exit: cozy
           show-on-start: false
           show-on-exit: true
-          custom-facts: |
-            - name: Environment
-              value: ${{ needs.determine_environment.outputs.environment }}
-            - name: Version
-              value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
-            - name: Commit
-              value: ${{ github.sha }}
-            - name: Windows Build
-              value: '[Download Windows](${{ env.WINDOWS_URL }})'
-            - name: macOS Intel Build
-              value: '[Download macOS Intel](${{ env.MACOS_INTEL_URL }})'
-            - name: macOS ARM64 Build
-              value: '[Download macOS ARM64](${{ env.MACOS_ARM64_URL }})'
           custom-actions: |
             - text: Mac ARM64 Build
               url: "${{env.MACOS_ARM64_URL}}"
