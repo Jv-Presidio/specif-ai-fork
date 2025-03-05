@@ -188,7 +188,6 @@ jobs:
         run: |
           cd electron
           npm install
-          echo "APP URL - ${{ steps.set-env-vars.outputs.APP_URL }}"
           npm run package:mac
 
       - name: Package and Upload to S3
@@ -203,5 +202,5 @@ jobs:
           ARM_FILENAME=$(basename "$ARM_DMG")
 
           # Upload to S3
-          aws s3 cp "$INTEL_DMG" "s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
-          aws s3 cp "$ARM_DMG" "s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"
+          aws s3 cp "$INTEL_DMG" "s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
+          aws s3 cp "$ARM_DMG" "s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"
