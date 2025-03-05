@@ -100,12 +100,21 @@ jobs:
           npm install
           npm run package:win
 
-      - name: Package and Upload to S3
+      - name: Package Windows Build
         run: |
           cd electron
           $VERSION = (node -e "console.log(require('./package.json').version);" | Out-String).Trim()
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
+
+          # Upload to S3 for long-term storage
           aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment  }}/windows/$VERSION/win-unpacked.zip
+
+      - name: Upload Windows Build as GitHub Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-electron-build
+          path: electron/win-unpacked.zip
+          retention-days: 7
 
   # macOS Electron Build
   build_electron_mac:
@@ -194,9 +203,30 @@ jobs:
           INTEL_FILENAME=$(basename "$INTEL_DMG")
           ARM_FILENAME=$(basename "$ARM_DMG")
 
-          # Upload to S3
+          # Upload to S3 for long-term storage
           aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/intel/$INTEL_FILENAME"
           aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment }}/darwin/$VERSION/arm64/$ARM_FILENAME"
+
+          # Create directory for artifacts
+          mkdir -p macos-builds
+
+          # Copy DMG files to the artifacts directory
+          cp "$INTEL_DMG" macos-builds/
+          cp "$ARM_DMG" macos-builds/
+
+      - name: Upload macOS Intel Build as GitHub Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-build
+          path: electron/${{ env.INTEL_DMG }}
+          retention-days: 7
+
+      - name: Upload macOS ARM64 Build as GitHub Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-build
+          path: electron/${{ env.ARM_DMG }}
+          retention-days: 7
 
       - name: Set output file names
         id: set_output_names
@@ -207,96 +237,44 @@ jobs:
           echo "intel_dmg_name=$INTEL_FILENAME" >> $GITHUB_OUTPUT
           echo "arm_dmg_name=$ARM_FILENAME" >> $GITHUB_OUTPUT
 
-  get_artifact_urls:
-    needs: [build_electron_mac, build_electron_windows, determine_environment]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    outputs:
-      windows_url_encrypted: ${{ steps.get-urls.outputs.windows_url_encrypted }}
-      macos_intel_url_encrypted: ${{ steps.get-urls.outputs.macos_intel_url_encrypted }}
-      macos_arm64_url_encrypted: ${{ steps.get-urls.outputs.macos_arm64_url_encrypted }}
-      encryption_password: ${{ steps.get-urls.outputs.encryption_password }}
-    steps:
-      - name: Configure AWS credentials
-        id: aws-credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
-          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
-
-      - name: Generate and encrypt presigned URLs
-        id: get-urls
-        run: |
-          # Variables
-          VERSION="${{ needs.determine_environment.outputs.version }}"
-          ENV="${{ needs.determine_environment.outputs.environment }}"
-          BUCKET="${{ secrets.ELECTRON_S3_BUCKET }}"
-          INTEL_FILENAME="${{ needs.build_electron_mac.outputs.intel_dmg_name }}"
-          ARM_FILENAME="${{ needs.build_electron_mac.outputs.arm_dmg_name }}"
-
-          # Create a random encryption password
-          ENCRYPTION_PASSWORD=$(openssl rand -hex 16)
-
-          echo "Environment: $ENV"
-          echo "Version: $VERSION"
-
-          # Generate presigned URLs with 7-day expiry
-          WINDOWS_URL=$(aws s3 presign "s3://$BUCKET/$ENV/windows/$VERSION/win-unpacked.zip" --expires-in 604800)
-          echo "Generated Windows URL"
-
-          if [ -n "$INTEL_FILENAME" ]; then
-            MACOS_INTEL_URL=$(aws s3 presign "s3://$BUCKET/$ENV/darwin/$VERSION/intel/$INTEL_FILENAME" --expires-in 604800)
-            echo "Generated macOS Intel URL for $INTEL_FILENAME"
-          else
-            MACOS_INTEL_URL="No Intel build available"
-            echo "No Intel build available"
-          fi
-
-          if [ -n "$ARM_FILENAME" ]; then
-            MACOS_ARM64_URL=$(aws s3 presign "s3://$BUCKET/$ENV/darwin/$VERSION/arm64/$ARM_FILENAME" --expires-in 604800)
-            echo "Generated macOS ARM URL for $ARM_FILENAME"
-          else
-            MACOS_ARM64_URL="No ARM build available"
-            echo "No ARM build available"
-          fi
-
-          # Encrypt and base64 encode the URLs (using -base64 for OpenSSL output)
-          WINDOWS_ENCRYPTED=$(echo -n "$WINDOWS_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
-          MACOS_INTEL_ENCRYPTED=$(echo -n "$MACOS_INTEL_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
-          MACOS_ARM64_ENCRYPTED=$(echo -n "$MACOS_ARM64_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
-
-          # Output encrypted values
-          echo "windows_url_encrypted=$WINDOWS_ENCRYPTED" >> $GITHUB_OUTPUT
-          echo "macos_intel_url_encrypted=$MACOS_INTEL_ENCRYPTED" >> $GITHUB_OUTPUT
-          echo "macos_arm64_url_encrypted=$MACOS_ARM64_ENCRYPTED" >> $GITHUB_OUTPUT
-          echo "encryption_password=$ENCRYPTION_PASSWORD" >> $GITHUB_OUTPUT
-
   send_notification:
-    needs: [get_artifact_urls, determine_environment]
+    needs: [build_electron_mac, build_electron_windows, determine_environment]
     if: success()
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - name: Decrypt URLs
-        id: decrypt-urls
+      - name: Generate Artifact Download Links
+        id: generate-links
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get encrypted URLs and password from previous job
-          WINDOWS_ENCRYPTED="${{ needs.get_artifact_urls.outputs.windows_url_encrypted }}"
-          MACOS_INTEL_ENCRYPTED="${{ needs.get_artifact_urls.outputs.macos_intel_url_encrypted }}"
-          MACOS_ARM64_ENCRYPTED="${{ needs.get_artifact_urls.outputs.macos_arm64_url_encrypted }}"
-          ENCRYPTION_PASSWORD="${{ needs.get_artifact_urls.outputs.encryption_password }}"
+          # Using GitHub CLI to get artifact IDs
+          echo "Installing GitHub CLI..."
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh
 
-          # Decrypt URLs
-          WINDOWS_URL=$(echo -n "$WINDOWS_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
-          MACOS_INTEL_URL=$(echo -n "$MACOS_INTEL_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
-          MACOS_ARM64_URL=$(echo -n "$MACOS_ARM64_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+          echo "Getting artifact IDs..."
+          WINDOWS_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="windows-electron-build") | .id')
+          MACOS_INTEL_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-intel-build") | .id')
+          MACOS_ARM64_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-arm64-build") | .id')
+
+          # Generate URLs
+          WINDOWS_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${WINDOWS_ARTIFACT_ID}"
+          MACOS_INTEL_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_INTEL_ARTIFACT_ID}"
+          MACOS_ARM64_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_ARM64_ARTIFACT_ID}"
 
           # Store URLs in environment variables
           echo "WINDOWS_URL=$WINDOWS_URL" >> $GITHUB_ENV
           echo "MACOS_INTEL_URL=$MACOS_INTEL_URL" >> $GITHUB_ENV
           echo "MACOS_ARM64_URL=$MACOS_ARM64_URL" >> $GITHUB_ENV
+
+          echo "✅ Windows Artifact URL: $WINDOWS_URL"
+          echo "✅ macOS Intel Artifact URL: $MACOS_INTEL_URL"
+          echo "✅ macOS ARM64 Artifact URL: $MACOS_ARM64_URL"
 
       - name: Send Teams notification with Download Links
         uses: toko-bifrost/ms-teams-deploy-card@master
@@ -314,8 +292,8 @@ jobs:
             - name: Commit
               value: ${{ github.sha }}
             - name: Windows Build
-              value: '[Download Windows]( ${{ env.WINDOWS_URL }} )'
+              value: '[Download Windows](${{ env.WINDOWS_URL }})'
             - name: macOS Intel Build
-              value: '[Download macOS Intel]( ${{ env.MACOS_INTEL_URL }} )'
+              value: '[Download macOS Intel](${{ env.MACOS_INTEL_URL }})'
             - name: macOS ARM64 Build
-              value: '[Download macOS ARM64]( ${{ env.MACOS_ARM64_URL }} )'
+              value: '[Download macOS ARM64](${{ env.MACOS_ARM64_URL }})'
