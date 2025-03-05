@@ -288,7 +288,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: cozy
+          card-layout-exit: complete
           show-on-start: false
           show-on-exit: true
           custom-facts: |
