@@ -12,9 +12,6 @@ on:
 jobs:
   determine_environment:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       version: ${{ steps.set-env.outputs.version }}
@@ -57,7 +54,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 18
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
@@ -111,6 +108,9 @@ jobs:
   build_electron_mac:
     needs: [determine_environment]
     runs-on: macos-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -126,7 +126,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 18
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 

@@ -1,7 +1,10 @@
 name: Build Frontend and Backend
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Initialize Dependencies"]
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
