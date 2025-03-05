@@ -145,6 +145,39 @@ jobs:
             echo "Deploying to development environment"
           fi
 
+      - name: Get EC2 Instance ID
+        id: get-instance-id
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ steps.deploy-vars.outputs.INSTANCE_NAME }}" \
+            --query "Reservations[].Instances[].[InstanceId]" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "Instance ID not found!"
+            exit 1
+          fi
+
+          echo "::add-mask::$INSTANCE_ID"
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+      - name: Start SSM Port Forwarding
+        id: start-ssm
+        run: |
+          LOCAL_PORT=$(shuf -i 2000-65000 -n 1)
+          echo "::add-mask::$LOCAL_PORT"
+          echo "LOCAL_PORT=$LOCAL_PORT" >> $GITHUB_ENV
+
+          aws ssm start-session \
+            --target "$INSTANCE_ID" \
+            --document-name "AWS-StartPortForwardingSession" \
+            --parameters "{\"portNumber\":[\"22\"], \"localPortNumber\":[\"$LOCAL_PORT\"]}" &
+
+          SSM_PID=$!
+          echo "::add-mask::$SSM_PID"
+          echo "SSM_PID=$SSM_PID" >> $GITHUB_ENV
+          sleep 5
+
       - name: Retrieve SSH key from AWS Secrets Manager
         id: ssh-key
         run: |
@@ -159,14 +192,14 @@ jobs:
 
       - name: Copy deployment script to server
         run: |
-          scp -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
+          scp -o StrictHostKeyChecking=no -p ${{env.LOCAL_PORT}} -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@localhost:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
 
       - name: Deploy to EC2 instance
         run: |
           # Get AWS account ID
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
-          ssh -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
+          ssh -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@localhost -p ${{ env.LOCAL_PORT }} "
             export IMAGE_NAME=\"${{ steps.deploy-vars.outputs.IMAGE_NAME }}\"
             export TAG=\"${{ github.sha }}\"
             export AWS_ACCOUNT_ID=\"${AWS_ACCOUNT_ID}\"
@@ -193,6 +226,23 @@ jobs:
             chmod +x ec2-deploy.sh
             ./ec2-deploy.sh
           "
+
+      - name: Cleanup SSM Sessions
+        run: |
+          SESSION_IDS=$(aws ssm describe-sessions --state Active --query "Sessions[?Target=='$INSTANCE_ID'].SessionId" --output text)
+
+          if [[ -n "$SESSION_IDS" ]]; then
+              for SESSION_ID in $SESSION_IDS; do
+                  aws ssm terminate-session --session-id "$SESSION_ID" || true
+              done
+          else
+              echo "No active SSM sessions found."
+          fi
+
+          if ps -p $SSM_PID > /dev/null; then
+              echo "Terminating SSM port forwarding..."
+              kill -9 $SSM_PID || true
+          fi
 
       - name: Clean up temporary files
         if: always()
