@@ -192,6 +192,7 @@ jobs:
 
       - name: Copy deployment script to server
         run: |
+          ls -A
           scp -o StrictHostKeyChecking=no -p ${{env.LOCAL_PORT}} -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@localhost:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
 
       - name: Deploy to EC2 instance
