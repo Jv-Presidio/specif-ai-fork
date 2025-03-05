@@ -1,7 +1,10 @@
 name: Build Electron Applications
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Deploy Frontend and Backend"]
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
@@ -9,6 +12,9 @@ on:
 jobs:
   determine_environment:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       version: ${{ steps.set-env.outputs.version }}
@@ -33,6 +39,9 @@ jobs:
   build_electron_windows:
     needs: [determine_environment]
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -100,23 +109,24 @@ jobs:
 
   # macOS Electron Build
   build_electron_mac:
-    needs: [ determine_environment]
+    needs: [determine_environment]
     runs-on: macos-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
+        id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 23
           cache: "npm"
           cache-dependency-path: electron/package-lock.json
 
