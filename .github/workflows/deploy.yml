@@ -30,27 +30,21 @@ jobs:
             echo "Detected development build"
           fi
 
-  # Get AWS credentials
-  aws_auth:
-    uses: ./.github/workflows/aws-oidc.yml
-    permissions:
-      id-token: write
-      contents: read
-
   # Frontend deployment job
   deploy_frontend:
-    needs: [aws_auth, determine_environment]
+    needs: [determine_environment]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
+        id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Download Frontend Build
         uses: actions/download-artifact@v4
@@ -79,18 +73,19 @@ jobs:
 
   # Backend deployment job
   deploy_backend:
-    needs: [aws_auth, determine_environment]
+    needs: [determine_environment]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
+        id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-session-name: GitHubActions-${{ github.repository }}-${{ github.run_id }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
       - name: Setup deployment variables
         id: deploy-vars
@@ -139,9 +134,11 @@ jobs:
           fi
 
       - name: Retrieve SSH key from AWS Secrets Manager
+        id: ssh-key
         run: |
           # Create temporary file for SSH key
           SSH_KEY_FILE=$(mktemp)
+          echo "::add-mask::$SSH_KEY_FILE"
           echo "SSH_KEY_FILE=$SSH_KEY_FILE" >> $GITHUB_ENV
 
           # Fetch the SSH key
@@ -150,14 +147,14 @@ jobs:
 
       - name: Copy deployment script to server
         run: |
-          scp -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
+          scp -o StrictHostKeyChecking=no -i ${{ steps.ssh-key.outputs.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
 
       - name: Deploy to EC2 instance
         run: |
           # Get AWS account ID
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
-          ssh -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
+          ssh -o StrictHostKeyChecking=no -i ${{ steps.ssh-key.outputs.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
             export IMAGE_NAME=\"${{ steps.deploy-vars.outputs.IMAGE_NAME }}\"
             export TAG=\"${{ github.sha }}\"
             export AWS_ACCOUNT_ID=\"${AWS_ACCOUNT_ID}\"
@@ -179,7 +176,7 @@ jobs:
             export SENTRY_DSN=\"${{ secrets.SENTRY_DSN }}\"
             export SENTRY_ENVIRONMENT=\"${{ steps.deploy-vars.outputs.SENTRY_ENVIRONMENT }}\"
             export SENTRY_RELEASE=\"${{ github.sha }}\"
-            export AWS_DEFAULT_REGION=\"${{ vars.AWS_REGION || 'us-east-1' }}\"
+            export AWS_DEFAULT_REGION=\"${{ secrets.AWS_DEFAULT_REGION  }}\"
             export UI_LOGGER_NAME=\"${{ secrets.UI_LOGGER_NAME }}\"
             chmod +x ec2-deploy.sh
             ./ec2-deploy.sh
@@ -189,8 +186,8 @@ jobs:
         if: always()
         run: |
           # Clean up temporary files
-          if [[ -f "${{ env.SSH_KEY_FILE }}" ]]; then
-            rm -f ${{ env.SSH_KEY_FILE }}
+          if [[ -f "${{ steps.ssh-key.outputs.SSH_KEY_FILE }}" ]]; then
+            rm -f ${{ steps.ssh-key.outputs.SSH_KEY_FILE }}
           fi
 
   # Send notification on successful deployment
