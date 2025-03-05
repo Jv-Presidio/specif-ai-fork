@@ -6,7 +6,7 @@ on:
     types:
       - completed
     branches:
-      - main
+      - dev
   workflow_dispatch:
 
 jobs:
@@ -67,21 +67,6 @@ jobs:
           path: ui/dist/ui/
           github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
 
-      - name: Set Environment Variables
-        id: set-env-vars
-        run: |
-          # Set variables based on environment
-          if ("${{ needs.determine_environment.outputs.environment }}" -eq "production") {
-              $electronS3Bucket="${{ secrets.PROD_ELECTRON_S3_BUCKET }}"
-              $appUrl="${{ secrets.PROD_APP_URL }}"
-          } else {
-              $electronS3Bucket="${{ secrets.DEV_ELECTRON_S3_BUCKET }}"
-              $appUrl="${{ secrets.DEV_APP_URL }}"
-          }
-
-          echo "ELECTRON_S3_BUCKET=$electronS3Bucket" >> $env:GITHUB_OUTPUT
-          echo "APP_URL=$appUrl" >> $env:GITHUB_OUTPUT
-
       - name: Display Debug Info
         run: |
           echo "Contents of dist/ui:"
@@ -105,7 +90,7 @@ jobs:
           cd electron
           $VERSION = (node -e "console.log(require('./package.json').version);" | Out-String).Trim()
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
-          aws s3 cp win-unpacked.zip s3://${{ steps.set-env-vars.outputs.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
+          aws s3 cp win-unpacked.zip s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/windows/$VERSION/win-unpacked.zip
 
   # macOS Electron Build
   build_electron_mac:
@@ -141,21 +126,6 @@ jobs:
           workflow_conclusion: success
           path: ui/dist/ui/
           github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
-
-      - name: Set Environment Variables
-        id: set-env-vars
-        run: |
-          # Set variables based on environment
-          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
-              ELECTRON_S3_BUCKET="${{ secrets.PROD_ELECTRON_S3_BUCKET }}"
-              APP_URL="${{ secrets.PROD_APP_URL }}"
-          else
-              ELECTRON_S3_BUCKET="${{ secrets.DEV_ELECTRON_S3_BUCKET }}"
-              APP_URL="${{ secrets.DEV_APP_URL }}"
-          fi
-
-          echo "ELECTRON_S3_BUCKET=$ELECTRON_S3_BUCKET" >> $GITHUB_OUTPUT
-          echo "APP_URL=$APP_URL" >> $GITHUB_OUTPUT
 
       - name: Fetch Apple Developer Certificate
         run: |
@@ -202,5 +172,5 @@ jobs:
           ARM_FILENAME=$(basename "$ARM_DMG")
 
           # Upload to S3
-          aws s3 cp "$INTEL_DMG" "s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
-          aws s3 cp "$ARM_DMG" "s3://${{ env.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"
+          aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/intel/$INTEL_FILENAME"
+          aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ github.ref_name }}/darwin/$VERSION/arm64/$ARM_FILENAME"

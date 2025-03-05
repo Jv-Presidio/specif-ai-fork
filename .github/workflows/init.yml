@@ -3,7 +3,7 @@ name: Initialize Dependencies
 on:
   push:
     branches:
-      - main
+      - dev
   workflow_dispatch:
 
 jobs:
