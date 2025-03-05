@@ -280,8 +280,8 @@ jobs:
           show-on-exit: true
           custom-actions: |
             - text: Download MacOS ARM
-              url: ${{ needs.get_artifact_urls.outputs.macos_arm64_url }}
+              url: "${{ needs.get_artifact_urls.outputs.macos_arm64_url }}"
             - text: Download MacOS Intel
-              url: ${{ needs.get_artifact_urls.outputs.macos_intel_url }}
+              url: "${{ needs.get_artifact_urls.outputs.macos_intel_url }}"
             - text: Download Windows
-              url: ${{ needs.get_artifact_urls.outputs.windows_url }}
+              url: "${{ needs.get_artifact_urls.outputs.windows_url }}"
