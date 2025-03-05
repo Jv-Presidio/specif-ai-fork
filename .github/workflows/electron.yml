@@ -214,9 +214,10 @@ jobs:
       id-token: write
       contents: read
     outputs:
-      windows_url: ${{ steps.get-urls.outputs.windows_url }}
-      macos_intel_url: ${{ steps.get-urls.outputs.macos_intel_url }}
-      macos_arm64_url: ${{ steps.get-urls.outputs.macos_arm64_url }}
+      windows_url_encrypted: ${{ steps.get-urls.outputs.windows_url_encrypted }}
+      macos_intel_url_encrypted: ${{ steps.get-urls.outputs.macos_intel_url_encrypted }}
+      macos_arm64_url_encrypted: ${{ steps.get-urls.outputs.macos_arm64_url_encrypted }}
+      encryption_password: ${{ steps.get-urls.outputs.encryption_password }}
     steps:
       - name: Configure AWS credentials
         id: aws-credentials
@@ -226,7 +227,7 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
-      - name: Generate presigned URLs
+      - name: Generate and encrypt presigned URLs
         id: get-urls
         run: |
           # Variables
@@ -235,6 +236,9 @@ jobs:
           BUCKET="${{ secrets.ELECTRON_S3_BUCKET }}"
           INTEL_FILENAME="${{ needs.build_electron_mac.outputs.intel_dmg_name }}"
           ARM_FILENAME="${{ needs.build_electron_mac.outputs.arm_dmg_name }}"
+
+          # Create a random encryption password
+          ENCRYPTION_PASSWORD=$(openssl rand -hex 16)
 
           echo "Environment: $ENV"
           echo "Version: $VERSION"
@@ -259,30 +263,41 @@ jobs:
             echo "No ARM build available"
           fi
 
-          # Output values directly
-          {
-            echo "windows_url<<EOF"
-            echo "$WINDOWS_URL"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+          # Encrypt and base64 encode the URLs (using -base64 for OpenSSL output)
+          WINDOWS_ENCRYPTED=$(echo -n "$WINDOWS_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+          MACOS_INTEL_ENCRYPTED=$(echo -n "$MACOS_INTEL_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+          MACOS_ARM64_ENCRYPTED=$(echo -n "$MACOS_ARM64_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
 
-          {
-            echo "macos_intel_url<<EOF"
-            echo "$MACOS_INTEL_URL"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-          {
-            echo "macos_arm64_url<<EOF"
-            echo "$MACOS_ARM64_URL"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+          # Output encrypted values
+          echo "windows_url_encrypted=$WINDOWS_ENCRYPTED" >> $GITHUB_OUTPUT
+          echo "macos_intel_url_encrypted=$MACOS_INTEL_ENCRYPTED" >> $GITHUB_OUTPUT
+          echo "macos_arm64_url_encrypted=$MACOS_ARM64_ENCRYPTED" >> $GITHUB_OUTPUT
+          echo "encryption_password=$ENCRYPTION_PASSWORD" >> $GITHUB_OUTPUT
 
   send_notification:
     needs: [get_artifact_urls, determine_environment]
     if: success()
     runs-on: ubuntu-latest
     steps:
+      - name: Decrypt URLs
+        id: decrypt-urls
+        run: |
+          # Get encrypted URLs and password from previous job
+          WINDOWS_ENCRYPTED="${{ needs.get_artifact_urls.outputs.windows_url_encrypted }}"
+          MACOS_INTEL_ENCRYPTED="${{ needs.get_artifact_urls.outputs.macos_intel_url_encrypted }}"
+          MACOS_ARM64_ENCRYPTED="${{ needs.get_artifact_urls.outputs.macos_arm64_url_encrypted }}"
+          ENCRYPTION_PASSWORD="${{ needs.get_artifact_urls.outputs.encryption_password }}"
+
+          # Decrypt URLs
+          WINDOWS_URL=$(echo -n "$WINDOWS_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+          MACOS_INTEL_URL=$(echo -n "$MACOS_INTEL_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+          MACOS_ARM64_URL=$(echo -n "$MACOS_ARM64_ENCRYPTED" | openssl enc -aes-256-cbc -pbkdf2 -d -salt -k "$ENCRYPTION_PASSWORD" -base64 -A)
+
+          # Store URLs in environment variables
+          echo "WINDOWS_URL=$WINDOWS_URL" >> $GITHUB_ENV
+          echo "MACOS_INTEL_URL=$MACOS_INTEL_URL" >> $GITHUB_ENV
+          echo "MACOS_ARM64_URL=$MACOS_ARM64_URL" >> $GITHUB_ENV
+
       - name: Send Teams notification with Download Links
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
@@ -299,8 +314,8 @@ jobs:
             - name: Commit
               value: ${{ github.sha }}
             - name: Windows Build
-              value: '[Download Windows]( ${{ needs.get_artifact_urls.outputs.windows_url }} )'
+              value: '[Download Windows]( ${{ env.WINDOWS_URL }} )'
             - name: macOS Intel Build
-              value: '[Download macOS Intel]( ${{ needs.get_artifact_urls.outputs.macos_intel_url }} )'
+              value: '[Download macOS Intel]( ${{ env.MACOS_INTEL_URL }} )'
             - name: macOS ARM64 Build
-              value: '[Download macOS ARM64]( ${{ needs.get_artifact_urls.outputs.macos_arm64_url }} )'
+              value: '[Download macOS ARM64]( ${{ env.MACOS_ARM64_URL }} )'
