@@ -230,9 +230,13 @@ jobs:
           GITHUB_API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
           ARTIFACTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}" $GITHUB_API_URL)
 
-          WINDOWS_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-windows")) | .archive_download_url')
-          MACOS_INTEL_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-intel")) | .archive_download_url')
-          MACOS_ARM64_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-arm64")) | .archive_download_url')
+          WINDOWS_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-windows")) | .id')
+          MACOS_INTEL_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-intel")) | .id')
+          MACOS_ARM64_ID=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-arm64")) | .id')
+
+          WINDOWS_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$WINDOWS_ID"
+          MACOS_INTEL_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$MACOS_INTEL_ID"
+          MACOS_ARM64_URL="https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts/$MACOS_ARM64_ID"
 
           echo "windows_url=$WINDOWS_URL" >> $GITHUB_OUTPUT
           echo "macos_intel_url=$MACOS_INTEL_URL" >> $GITHUB_OUTPUT
@@ -249,7 +253,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
           card-layout-exit: complete
-          show-on-start: false
+          show-on-start: cozy
           show-on-exit: true
           custom-facts: |
             - name: Environment
@@ -264,3 +268,6 @@ jobs:
               value: '[Download macOS Intel]( ${{ needs.get_artifact_urls.outputs.macos_intel_url }} )'
             - name: macOS ARM64 Build
               value: '[Download macOS ARM64]( ${{ needs.get_artifact_urls.outputs.macos_arm64_url }} )'
+          custom-actions: |
+            - text: Download MacOS ARM
+              url: ${{ needs.get_artifact_urls.outputs.macos_arm64_url }}
