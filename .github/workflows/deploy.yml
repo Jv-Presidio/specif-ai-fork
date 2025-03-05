@@ -12,11 +12,11 @@ on:
       release-type:
         description: "Choose release type"
         required: true
-        default: "pre-release"
+        default: "release"
         type: choice
         options:
-          - pre-release
           - release
+          - marketplace
 
 jobs:
   determine_environment:

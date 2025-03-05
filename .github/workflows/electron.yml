@@ -12,11 +12,11 @@ on:
       release-type:
         description: "Choose release type"
         required: true
-        default: "pre-release"
+        default: "release"
         type: choice
         options:
-          - pre-release
           - release
+          - marketplace
 
 jobs:
   determine_environment:
@@ -214,9 +214,9 @@ jobs:
       id-token: write
       contents: read
     outputs:
-      windows_url_encoded: ${{ steps.get-urls.outputs.windows_url_encoded }}
-      macos_intel_url_encoded: ${{ steps.get-urls.outputs.macos_intel_url_encoded }}
-      macos_arm64_url_encoded: ${{ steps.get-urls.outputs.macos_arm64_url_encoded }}
+      windows_url: ${{ steps.get-urls.outputs.windows_url }}
+      macos_intel_url: ${{ steps.get-urls.outputs.macos_intel_url }}
+      macos_arm64_url: ${{ steps.get-urls.outputs.macos_arm64_url }}
     steps:
       - name: Configure AWS credentials
         id: aws-credentials
@@ -259,35 +259,30 @@ jobs:
             echo "No ARM build available"
           fi
 
-          # Base64 encode the URLs to prevent GitHub from marking them as secrets
-          WINDOWS_URL_ENCODED=$(echo "$WINDOWS_URL" | base64 -w 0)
-          MACOS_INTEL_URL_ENCODED=$(echo "$MACOS_INTEL_URL" | base64 -w 0)
-          MACOS_ARM64_URL_ENCODED=$(echo "$MACOS_ARM64_URL" | base64 -w 0)
+          # Output values directly
+          {
+            echo "windows_url<<EOF"
+            echo "$WINDOWS_URL"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
-          # Output encoded values
-          echo "windows_url_encoded=$WINDOWS_URL_ENCODED" >> $GITHUB_OUTPUT
-          echo "macos_intel_url_encoded=$MACOS_INTEL_URL_ENCODED" >> $GITHUB_OUTPUT
-          echo "macos_arm64_url_encoded=$MACOS_ARM64_URL_ENCODED" >> $GITHUB_OUTPUT
+          {
+            echo "macos_intel_url<<EOF"
+            echo "$MACOS_INTEL_URL"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+          {
+            echo "macos_arm64_url<<EOF"
+            echo "$MACOS_ARM64_URL"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
   send_notification:
     needs: [get_artifact_urls, determine_environment]
     if: success()
     runs-on: ubuntu-latest
     steps:
-      # Add a step to decode the URLs first
-      - name: Decode URLs
-        id: decode-urls
-        run: |
-          # Decode base64 URLs
-          WINDOWS_URL=$(echo "${{ needs.get_artifact_urls.outputs.windows_url_encoded }}" | base64 -d)
-          MACOS_INTEL_URL=$(echo "${{ needs.get_artifact_urls.outputs.macos_intel_url_encoded }}" | base64 -d)
-          MACOS_ARM64_URL=$(echo "${{ needs.get_artifact_urls.outputs.macos_arm64_url_encoded }}" | base64 -d)
-
-          # Store decoded URLs in environment
-          echo "WINDOWS_URL=$WINDOWS_URL" >> $GITHUB_ENV
-          echo "MACOS_INTEL_URL=$MACOS_INTEL_URL" >> $GITHUB_ENV
-          echo "MACOS_ARM64_URL=$MACOS_ARM64_URL" >> $GITHUB_ENV
-
       - name: Send Teams notification with Download Links
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
@@ -304,8 +299,8 @@ jobs:
             - name: Commit
               value: ${{ github.sha }}
             - name: Windows Build
-              value: '[Download Windows]( ${{ env.WINDOWS_URL }} )'
+              value: '[Download Windows]( ${{ needs.get_artifact_urls.outputs.windows_url }} )'
             - name: macOS Intel Build
-              value: '[Download macOS Intel]( ${{ env.MACOS_INTEL_URL}} )'
+              value: '[Download macOS Intel]( ${{ needs.get_artifact_urls.outputs.macos_intel_url }} )'
             - name: macOS ARM64 Build
-              value: '[Download macOS ARM64]( ${{ env.MACOS_ARM64_URL }} )'
+              value: '[Download macOS ARM64]( ${{ needs.get_artifact_urls.outputs.macos_arm64_url }} )'

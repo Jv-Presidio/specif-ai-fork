@@ -9,13 +9,62 @@ on:
       release-type:
         description: "Choose release type"
         required: true
-        default: "pre-release"
+        default: "release"
         type: choice
         options:
-          - pre-release
           - release
+          - marketplace
+      marketplace-version:
+        description: "Version for marketplace release (required for marketplace release type)"
+        required: false
+        type: string
 
 jobs:
+  determine_environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      version: ${{ steps.set-env.outputs.version }}
+      is_release: ${{ steps.set-env.outputs.is_release }}
+      is_marketplace: ${{ steps.set-env.outputs.is_marketplace }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine environment and release type
+        id: set-env
+        run: |
+          # For manual workflow with marketplace release input
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "marketplace" ]]; then
+            # Check if marketplace version was provided
+            if [[ -z "${{ github.event.inputs.marketplace-version }}" ]]; then
+              echo "Error: marketplace-version is required for marketplace releases"
+              exit 1
+            fi
+            VERSION="${{ github.event.inputs.marketplace-version }}"
+            echo "environment=github-production" >> $GITHUB_OUTPUT
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "is_marketplace=true" >> $GITHUB_OUTPUT
+            echo "Manual marketplace release v${VERSION}"
+          # For manual workflow with release input
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "release" ]]; then
+            # Get version from package.json
+            VERSION=$(grep -m1 '"version":' electron/package.json | cut -d'"' -f4)
+            echo "environment=github-production" >> $GITHUB_OUTPUT
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "is_marketplace=false" >> $GITHUB_OUTPUT
+            echo "Manual production release v${VERSION}"
+          # Development build
+          else
+            echo "environment=github-development" >> $GITHUB_OUTPUT
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_marketplace=false" >> $GITHUB_OUTPUT
+            echo "Detected development build"
+          fi
+
   init_frontend:
     runs-on: ubuntu-latest
     steps:
@@ -43,3 +92,62 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-${{ github.ref_name }}-
             ${{ runner.os }}-npm-
+
+  build_marketplace:
+    needs: [determine_environment, init_frontend]
+    if: needs.determine_environment.outputs.is_marketplace == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        id: aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
+
+      - name: Get AWS account ID
+        id: get-aws-account
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}" >> $GITHUB_OUTPUT
+          echo "::add-mask::${AWS_ACCOUNT_ID}"
+          echo "Retrieved AWS account ID: ***"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.0
+
+      - name: Build and Push Marketplace Image
+        run: |
+          VERSION="${{ needs.determine_environment.outputs.version }}"
+          IMAGE_NAME="hai-build-unified-image"
+          BUILD_ENV="build:prod"
+          MARKETPLACE_IMAGE_TAG="${VERSION}"
+
+          echo "Building Docker image for Marketplace version: $VERSION"
+
+          # Build Docker image
+          docker build --build-arg BUILD_ENV=$BUILD_ENV --no-cache --progress=plain -t ${IMAGE_NAME}:$MARKETPLACE_IMAGE_TAG .
+
+          # Scan Docker image for vulnerabilities
+          trivy image ${IMAGE_NAME}:$MARKETPLACE_IMAGE_TAG
+
+          # Authenticate with AWS Marketplace ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_MARKETPLACE_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+
+          # Tag and push the image
+          docker tag ${IMAGE_NAME}:$MARKETPLACE_IMAGE_TAG ${{ secrets.AWS_MARKETPLACE_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.PRODUCT_NAME }}/${{ secrets.REPO_NAME }}:$MARKETPLACE_IMAGE_TAG
+          docker push ${{ secrets.AWS_MARKETPLACE_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.PRODUCT_NAME }}/${{ secrets.REPO_NAME }}:$MARKETPLACE_IMAGE_TAG
+
+          # Cleanup unused Docker images
+          docker image prune -af --filter "until=2h"
