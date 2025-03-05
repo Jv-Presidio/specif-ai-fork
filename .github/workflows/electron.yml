@@ -191,14 +191,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-macos-intel-${{ needs.determine_environment.outputs.environment }}
-          path: ${{ steps.package_and_upload.outputs.INTEL_DMG }}
+          path: ${{ env.INTEL_DMG }}
           retention-days: 90
 
       - name: Upload macOS ARM64 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: electron-macos-arm64-${{ needs.determine_environment.outputs.environment }}
-          path: ${{  steps.package_and_upload.outputs.ARM_DMG }}
+          path: ${{ env.ARM_DMG }}
           retention-days: 90
 
   get_artifact_urls:
