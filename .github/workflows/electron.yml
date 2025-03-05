@@ -280,6 +280,9 @@ jobs:
           card-layout-exit: cozy
           show-on-start: false
           show-on-exit: true
+          timezone: "Asia/Kolkata"
+          enable-view-status: false
+          enable-review-diffs: false
           custom-actions: |
             - text: Mac ARM64 Build
               url: "${{env.MACOS_ARM64_URL}}"
