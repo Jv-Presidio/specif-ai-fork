@@ -59,10 +59,13 @@ jobs:
           cache-dependency-path: electron/package-lock.json
 
       - name: Download Frontend Build
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v2
         with:
           name: frontend-build
+          workflow: build.yml
+          workflow_conclusion: success
           path: ui/dist/ui/
+          github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
 
       - name: Set Environment Variables
         id: set-env-vars
@@ -131,10 +134,13 @@ jobs:
           cache-dependency-path: electron/package-lock.json
 
       - name: Download Frontend Build
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v2
         with:
           name: frontend-build
+          workflow: build.yml
+          workflow_conclusion: success
           path: ui/dist/ui/
+          github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
 
       - name: Set Environment Variables
         id: set-env-vars
