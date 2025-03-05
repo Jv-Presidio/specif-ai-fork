@@ -98,7 +98,6 @@ jobs:
         run: |
           cd electron
           npm install
-          echo "APP URL - ${{ steps.set-env-vars.outputs.APP_URL }}"
           npm run package:win
 
       - name: Package and Upload to S3
@@ -192,8 +191,8 @@ jobs:
           # Get DMG file paths
           INTEL_DMG=$(find dist -name "*.dmg" -not -name "*arm*.dmg" -type f)
           ARM_DMG=$(find dist -name "*arm*.dmg" -type f)
-          echo "$INTEL_DMG"
-          echo "$ARM_DMG"
+          echo "::add-mask::$INTEL_DMG"
+          echo "::add-mask::$ARM_DMG"
           echo "INTEL_DMG=$INTEL_DMG" >> $GITHUB_ENV
           echo "ARM_DMG=$ARM_DMG" >> $GITHUB_ENV
           INTEL_FILENAME=$(basename "$INTEL_DMG")
@@ -207,14 +206,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-macos-intel-${{ needs.determine_environment.outputs.environment }}
-          path: ${{ env.INTEL_DMG }}
+          path: electron/${{ env.INTEL_DMG }}
           retention-days: 90
 
       - name: Upload macOS ARM64 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: electron-macos-arm64-${{ needs.determine_environment.outputs.environment }}
-          path: ${{ env.ARM_DMG }}
+          path: electron/${{ env.ARM_DMG }}
           retention-days: 90
 
   get_artifact_urls:
@@ -229,7 +228,7 @@ jobs:
         id: get-urls
         run: |
           GITHUB_API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
-          ARTIFACTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $GITHUB_API_URL)
+          ARTIFACTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}" $GITHUB_API_URL)
 
           WINDOWS_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-windows")) | .archive_download_url')
           MACOS_INTEL_URL=$(echo $ARTIFACTS | jq -r '.artifacts[] | select(.name | test("electron-macos-intel")) | .archive_download_url')
