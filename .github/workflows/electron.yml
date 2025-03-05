@@ -107,7 +107,6 @@ jobs:
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
           aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ needs.determine_environment.outputs.environment  }}/windows/$VERSION/win-unpacked.zip
 
-
   # macOS Electron Build
   build_electron_mac:
     needs: [determine_environment]
@@ -297,10 +296,16 @@ jobs:
           card-layout-exit: cozy
           show-on-start: false
           show-on-exit: true
-          custom-actions: |
-            - text: Download MacOS ARM
-              url: "${{ env.MACOS_ARM64_URL }}"
-            - text: Download MacOS Intel
-              url: "${{ env.MACOS_INTEL_URL }}"
-            - text: Download Windows
-              url: "${{ env.WINDOWS_URL }}"
+          custom-facts: |
+            - name: Environment
+              value: ${{ needs.determine_environment.outputs.environment }}
+            - name: Version
+              value: ${{ needs.determine_environment.outputs.is_release == 'true' && format('v{0}', needs.determine_environment.outputs.version) || 'development' }}
+            - name: Commit
+              value: ${{ github.sha }}
+            - name: Windows Build
+              value: '[Download Windows]( ${{ env.WINDOWS_URL }} )'
+            - name: macOS Intel Build
+              value: '[Download macOS Intel]( ${{ env.MACOS_INTEL_URL}} )'
+            - name: macOS ARM64 Build
+              value: '[Download macOS ARM64]( ${{ env.MACOS_ARM64_URL }} )'
