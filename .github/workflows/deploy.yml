@@ -1,7 +1,10 @@
 name: Deploy Frontend and Backend
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build Frontend and Backend"]
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
@@ -153,14 +156,14 @@ jobs:
 
       - name: Copy deployment script to server
         run: |
-          scp -o StrictHostKeyChecking=no -i ${{ steps.ssh-key.outputs.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
+          scp -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} .github/scripts/ec2-deploy.sh ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }}:/home/${{ secrets.SSH_USER }}/ec2-deploy.sh
 
       - name: Deploy to EC2 instance
         run: |
           # Get AWS account ID
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
-          ssh -o StrictHostKeyChecking=no -i ${{ steps.ssh-key.outputs.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
+          ssh -o StrictHostKeyChecking=no -i ${{ env.SSH_KEY_FILE }} ${{ secrets.SSH_USER }}@${{ steps.deploy-vars.outputs.SERVER }} "
             export IMAGE_NAME=\"${{ steps.deploy-vars.outputs.IMAGE_NAME }}\"
             export TAG=\"${{ github.sha }}\"
             export AWS_ACCOUNT_ID=\"${AWS_ACCOUNT_ID}\"
@@ -192,8 +195,8 @@ jobs:
         if: always()
         run: |
           # Clean up temporary files
-          if [[ -f "${{ steps.ssh-key.outputs.SSH_KEY_FILE }}" ]]; then
-            rm -f ${{ steps.ssh-key.outputs.SSH_KEY_FILE }}
+          if [[ -f "${{ env.SSH_KEY_FILE }}" ]]; then
+            rm -f ${{ env.SSH_KEY_FILE }}
           fi
 
   # Send notification on successful deployment
