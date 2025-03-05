@@ -160,8 +160,18 @@ jobs:
       - name: Fetch Apple Developer Certificate
         run: |
           CSC_DATA=$(aws secretsmanager get-secret-value --secret-id ${{ secrets.APPLE_CSC_SECRET_NAME }} --query SecretString --output text)
-          echo "CSC_LINK=$(echo $CSC_DATA | jq -r '.CSC_LINK')" >> $GITHUB_ENV
-          echo "CSC_KEY_PASSWORD=$(echo $CSC_DATA | jq -r '.CSC_KEY_PASSWORD')" >> $GITHUB_ENV
+          echo "::add-mask::$CSC_DATA"
+          # Extract credentials and mask them
+          CSC_LINK=$(echo $CSC_DATA | jq -r '.CSC_LINK')
+          CSC_KEY_PASSWORD=$(echo $CSC_DATA | jq -r '.CSC_KEY_PASSWORD')
+
+          # Mask sensitive values before setting them as environment variables
+          echo "::add-mask::$CSC_LINK"
+          echo "::add-mask::$CSC_KEY_PASSWORD"
+
+          # Set the masked values as environment variables
+          echo "CSC_LINK=$CSC_LINK" >> $GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> $GITHUB_ENV
 
       - name: Display Debug Info
         run: |
@@ -177,7 +187,6 @@ jobs:
       - name: Install Dependencies and Build Electron
         run: |
           cd electron
-          npm install -g npm
           npm install
           echo "APP URL - ${{ steps.set-env-vars.outputs.APP_URL }}"
           npm run package:mac
