@@ -305,6 +305,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          BUILD_VERSION: ${{ needs.determine_environment.outputs.version }}
         run: |
           # Get artifact IDs for download links
           WINDOWS_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="windows-electron-build") | .id')
@@ -315,7 +316,16 @@ jobs:
           MACOS_INTEL_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_INTEL_ARTIFACT_ID}"
           MACOS_ARM64_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_ARM64_ARTIFACT_ID}"
 
-          # Prepare the simple notification with download links
+          # Get commit details
+          COMMIT_SHA=${{ github.sha }}
+          COMMIT_SHORT_SHA=${COMMIT_SHA:0:7}
+
+          # Get commit message, author and timestamp (IST - UTC+5:30)
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s" $COMMIT_SHA)
+          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" $COMMIT_SHA)
+          TIMESTAMP=$(TZ=":Asia/Kolkata" date "+%d-%b-%Y %I:%M %p IST")
+
+          # Prepare the simple notification with download links and commit info
           curl -X POST -H 'Content-type: application/json' --data "{
             \"type\": \"message\",
             \"attachments\": [
@@ -330,6 +340,27 @@ jobs:
                       \"text\": \"✅ Development Build Successful\",
                       \"weight\": \"Bolder\",
                       \"size\": \"Medium\"
+                    },
+                    {
+                      \"type\": \"FactSet\",
+                      \"facts\": [
+                        {
+                          \"title\": \"Version\",
+                          \"value\": \"v${BUILD_VERSION}\"
+                        },
+                        {
+                          \"title\": \"Built at\",
+                          \"value\": \"$TIMESTAMP\"
+                        },
+                        {
+                          \"title\": \"Commit\",
+                          \"value\": \"${COMMIT_SHORT_SHA} - ${COMMIT_MSG}\"
+                        },
+                        {
+                          \"title\": \"Author\",
+                          \"value\": \"$COMMIT_AUTHOR\"
+                        }
+                      ]
                     },
                     {
                       \"type\": \"ActionSet\",
@@ -440,7 +471,7 @@ jobs:
           fi
 
           # Fetch random celebration GIF
-          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=0UTRbFtkMxAplrohufYco5IY74U8hOes&tag=celebration+success&rating=g" | jq -r '.data.images.original.url')
+          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=0UTRbFtkMxAplrohufYco5IY74U8hOes&tag=celebration+sports&rating=g" | jq -r '.data.images.original.webp')
           echo "🎉 Selected GIF: $RANDOM_GIF"
 
           # Using sed instead of awk to process the changelog sections
