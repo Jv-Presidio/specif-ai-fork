@@ -1,0 +1,107 @@
+name: Main Workflow
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: "Choose release type"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - marketplace
+      marketplace-version:
+        description: "Version for marketplace release (required for marketplace release type)"
+        required: false
+        type: string
+
+jobs:
+  determine_workflow:
+    runs-on: ubuntu-latest
+    outputs:
+      workflow_type: ${{ steps.set-workflow.outputs.workflow_type }}
+      version: ${{ steps.set-workflow.outputs.version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine workflow type
+        id: set-workflow
+        run: |
+          # For manual workflow with marketplace release
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "marketplace" ]]; then
+            if [[ -z "${{ github.event.inputs.marketplace-version }}" ]]; then
+              echo "Error: marketplace-version is required for marketplace releases"
+              exit 1
+            fi
+            echo "workflow_type=marketplace" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.marketplace-version }}" >> $GITHUB_OUTPUT
+            echo "Detected marketplace release workflow"
+
+          # For release event
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "workflow_type=release" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "Detected production release workflow"
+
+          # For push to main or manual release
+          else
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "release" ]]; then
+              echo "workflow_type=release" >> $GITHUB_OUTPUT
+            else
+              echo "workflow_type=main" >> $GITHUB_OUTPUT
+            fi
+            VERSION=$(grep -m1 '"version":' package.json | cut -d'"' -f4)
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "Detected main branch workflow"
+          fi
+
+  marketplace_flow:
+    needs: determine_workflow
+    if: needs.determine_workflow.outputs.workflow_type == 'marketplace'
+    uses: ./.github/workflows/build_marketplace.yml
+    with:
+      version: ${{ needs.determine_workflow.outputs.version }}
+    secrets: inherit
+
+  init_flow:
+    needs: determine_workflow
+    if: needs.determine_workflow.outputs.workflow_type != 'marketplace'
+    uses: ./.github/workflows/init.yml
+    with:
+      workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
+      version: ${{ needs.determine_workflow.outputs.version }}
+    secrets: inherit
+
+  build_flow:
+    needs: [determine_workflow, init_flow]
+    if: needs.determine_workflow.outputs.workflow_type != 'marketplace'
+    uses: ./.github/workflows/build.yml
+    with:
+      workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
+      version: ${{ needs.determine_workflow.outputs.version }}
+    secrets: inherit
+
+  deploy_flow:
+    needs: [determine_workflow, build_flow]
+    if: needs.determine_workflow.outputs.workflow_type != 'marketplace'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
+      version: ${{ needs.determine_workflow.outputs.version }}
+    secrets: inherit
+
+  electron_flow:
+    needs: [determine_workflow, deploy_flow]
+    if: needs.determine_workflow.outputs.workflow_type != 'marketplace'
+    uses: ./.github/workflows/electron.yml
+    with:
+      workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
+      version: ${{ needs.determine_workflow.outputs.version }}
+    secrets: inherit
