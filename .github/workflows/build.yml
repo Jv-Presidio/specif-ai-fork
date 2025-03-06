@@ -94,7 +94,7 @@ jobs:
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             if [[ "${{ needs.determine_environment.outputs.is_release }}" == "true" ]]; then
               # For release commits on main
-              echo "IMAGE_NAME=${{ secrets.PROD_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+              echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
             else
               # For regular commits on main
               echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
@@ -142,47 +142,3 @@ jobs:
           tags: |
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ steps.get-sha.outputs.COMMIT_SHA }}
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
-  # create_github_release:
-  #   needs: [determine_environment, build_frontend, build_backend]
-  #   if: needs.determine_environment.outputs.is_release == 'true' && github.ref_name == 'main'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout Repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-
-  #     - name: Get Commit Log
-  #       id: get_log
-  #       run: |
-  #         # Get commit log since previous release tag
-  #         RELEASE_LOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD)
-  #         echo "RELEASE_LOG<<EOF" >> $GITHUB_ENV
-  #         echo "$RELEASE_LOG" >> $GITHUB_ENV
-  #         echo "EOF" >> $GITHUB_ENV
-
-  #     - name: Create GitHub Release
-  #       uses: softprops/action-gh-release@v2
-  #       with:
-  #         tag_name: v${{ needs.determine_environment.outputs.version }}
-  #         name: Release v${{ needs.determine_environment.outputs.version }}
-  #         body: |
-  #           ## What's Changed
-  #           ${{ env.RELEASE_LOG }}
-  #         draft: false
-  #         prerelease: false
-
-  #     - name: Send Teams notification
-  #       uses: toko-bifrost/ms-teams-deploy-card@master
-  #       with:
-  #         github-token: ${{ secrets.GITHUB_TOKEN }}
-  #         webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-  #         card-layout-start: cozy
-  #         card-layout-exit: complete
-  #         show-on-start: true
-  #         show-on-exit: true
-  #         custom-facts: |
-  #           - name: Version
-  #             value: v${{ needs.determine_environment.outputs.version }}
-  #           - name: Environment
-  #             value: Production

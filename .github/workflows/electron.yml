@@ -228,6 +228,25 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Checkout Repository
+        if: needs.determine_environment.outputs.is_release == 'true'
+        uses: actions/checkout@v4
+
+      - name: Get Changelog Content
+        if: needs.determine_environment.outputs.is_release == 'true'
+        id: changelog
+        run: |
+          VERSION="${{ needs.determine_environment.outputs.version }}"
+          CHANGELOG_CONTENT=$(awk -v ver="## [$VERSION]" '
+            $0 ~ ver {p=1;next}
+            /^## \[/ {p=0}
+            p {print}
+          ' CHANGELOG.md)
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//'%'/'%25'}"
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\n'/'%0A'}"
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\r'/'%0D'}"
+          echo "content=$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+
       - name: Generate Artifact Download Links
         id: generate-links
         env:
@@ -255,7 +274,9 @@ jobs:
           echo "✅ macOS Intel Artifact URL: $MACOS_INTEL_URL"
           echo "✅ macOS ARM64 Artifact URL: $MACOS_ARM64_URL"
 
-      - name: Send Teams notification with Download Links
+      # Development notification
+      - name: Send Development Teams notification
+        if: needs.determine_environment.outputs.is_release != 'true'
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -273,3 +294,55 @@ jobs:
               url: "${{env.MACOS_INTEL_URL}}"
             - text: Windows Build
               url: "${{env.WINDOWS_URL}}"
+
+      # Production notification
+      - name: Send Production Teams notification
+        if: needs.determine_environment.outputs.is_release == 'true'
+        uses: toko-bifrost/ms-teams-deploy-card@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          card-layout-exit: complete
+          show-on-start: false
+          show-on-exit: true
+          timezone: "Asia/Kolkata"
+          enable-view-status-action: false
+          enable-review-diffs-action: false
+          custom-facts: |
+            - name: Version
+              value: ${{ needs.determine_environment.outputs.version }}
+            - name: Changes
+              value: ${{ steps.changelog.outputs.content }}
+          custom-actions: |
+            - text: Mac ARM64 Build
+              url: "${{env.MACOS_ARM64_URL}}"
+            - text: Mac Intel Build
+              url: "${{env.MACOS_INTEL_URL}}"
+            - text: Windows Build
+              url: "${{env.WINDOWS_URL}}"
+
+  create_release:
+    needs: [send_notification, determine_environment]
+    if: needs.determine_environment.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Release Draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.determine_environment.outputs.version }}"
+          CHANGELOG=$(awk -v ver="## [$VERSION]" '
+            $0 ~ ver {p=1;next}
+            /^## \[/ {p=0}
+            p {print}
+          ' CHANGELOG.md)
+
+          gh release create v$VERSION \
+            --draft \
+            --title "Release v$VERSION" \
+            --notes "$CHANGELOG"

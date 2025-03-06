@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'  # Trigger on version tags
   release:
     types: [created]
   workflow_dispatch:
@@ -34,8 +36,14 @@ jobs:
       - name: Determine workflow type
         id: set-workflow
         run: |
+          # For tag push (always production release)
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "workflow_type=release" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "Detected production release from tag"
+
           # For manual workflow with marketplace release
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "marketplace" ]]; then
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.release-type }}" == "marketplace" ]]; then
             if [[ -z "${{ github.event.inputs.marketplace-version }}" ]]; then
               echo "Error: marketplace-version is required for marketplace releases"
               exit 1
