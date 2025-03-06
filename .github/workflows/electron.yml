@@ -218,33 +218,9 @@ jobs:
           echo "intel_dmg_name=$INTEL_FILENAME" >> $GITHUB_OUTPUT
           echo "arm_dmg_name=$ARM_FILENAME" >> $GITHUB_OUTPUT
 
-  notification_content:
-    needs: [determine_environment]
-    runs-on: ubuntu-latest
-    if: needs.determine_environment.outputs.is_release == 'true'
-    permissions:
-      actions: read
-      contents: read
-    outputs:
-      content: ${{ steps.changelog.outputs.content }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Get Changelog Content
-        id: changelog
-        run: |
-          VERSION="${{ needs.determine_environment.outputs.version }}"
-          CHANGELOG_CONTENT=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
-          echo "content=$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-
   send_notification:
-    needs:
-      [
-        build_electron_mac,
-        build_electron_windows,
-        determine_environment,
-        notification_content,
-      ]
+    needs: [build_electron_mac, build_electron_windows, determine_environment]
+    if: success()
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -314,8 +290,8 @@ jobs:
           custom-facts: |
             - name: Version
               value: ${{ needs.determine_environment.outputs.version }}
-            - name: Changes
-              value: "${{ needs.notification_content.outputs.content }}"
+            - name: Release Status
+              value: "✅ Build successful"
           custom-actions: |
             - text: Mac ARM64 Build
               url: "${{env.MACOS_ARM64_URL}}"
