@@ -270,55 +270,52 @@ jobs:
           echo "✅ macOS Intel Artifact URL: $MACOS_INTEL_URL"
           echo "✅ macOS ARM64 Artifact URL: $MACOS_ARM64_URL"
 
-      # Development notification
-      - name: Send Development Teams notification
-        if: needs.determine_environment.outputs.is_release != 'true' && always()
-        uses: aliencube/microsoft-teams-actions@v0.8.0
-        with:
-          webhook_uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          title: "Development Build Notification"
-          summary: "Development build completed"
-          text: "A new development build has been completed."
-          theme_color: "0072C6"
-          sections: '[{"activityTitle": "Build Status", "activitySubtitle": "Development Environment"}]'
-
-      # Production notification
-      - name: Send Production Teams notification
-        if: needs.determine_environment.outputs.is_release == 'true' && always()
-        uses: aliencube/microsoft-teams-actions@v0.8.0
-        with:
-          webhook_uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          title: "Production Release Notification"
-          summary: "Production release completed"
-          text: "A new production release has been completed."
-          theme_color: "0072C6"
-          sections: '[{"activityTitle": "Release Status", "activitySubtitle": "Production Environment"}]'
-
       # Update Development notification with download links
-      - name: Update Development Teams notification with links
+      - name: Update Development Teams notification
         if: needs.determine_environment.outputs.is_release != 'true' && always()
-        uses: aliencube/microsoft-teams-actions@v0.8.0
+        uses: toko-bifrost/ms-teams-deploy-card@master
         with:
-          webhook_uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          title: "Development Build Links"
-          summary: "Download links for development build"
-          text: "Download the latest development build artifacts:"
-          theme_color: "0072C6"
-          sections: '[{"activityTitle": "Download Links"}]'
-          actions: '[{"@type":"OpenUri","name":"Mac ARM64 Build","targets":[{"os":"default","uri":"${{env.MACOS_ARM64_URL}}"}]},{"@type":"OpenUri","name":"Mac Intel Build","targets":[{"os":"default","uri":"${{env.MACOS_INTEL_URL}}"}]},{"@type":"OpenUri","name":"Windows Build","targets":[{"os":"default","uri":"${{env.WINDOWS_URL}}"}]}]'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          card-layout-exit: cozy
+          show-on-start: false
+          show-on-exit: true
+          timezone: "Asia/Kolkata"
+          enable-view-status-action: false
+          enable-review-diffs-action: false
+          custom-actions: |
+            - text: Mac ARM64 Build
+              url: "${{env.MACOS_ARM64_URL}}"
+            - text: Mac Intel Build
+              url: "${{env.MACOS_INTEL_URL}}"
+            - text: Windows Build
+              url: "${{env.WINDOWS_URL}}"
 
       # Update Production notification with download links and changelog
-      - name: Update Production Teams notification with links
+      - name: Update Production Teams notification
         if: needs.determine_environment.outputs.is_release == 'true' && always()
-        uses: aliencube/microsoft-teams-actions@v0.8.0
+        uses: toko-bifrost/ms-teams-deploy-card@master
         with:
-          webhook_uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          title: "Production Release Links"
-          summary: "Download links for production release"
-          text: "Version: ${{ needs.determine_environment.outputs.version }}\nChangelog:\n${{ steps.changelog.outputs.content }}"
-          theme_color: "0072C6"
-          sections: '[{"activityTitle": "Download Links"}]'
-          actions: '[{"@type":"OpenUri","name":"Mac ARM64 Build","targets":[{"os":"default","uri":"${{env.MACOS_ARM64_URL}}"}]},{"@type":"OpenUri","name":"Mac Intel Build","targets":[{"os":"default","uri":"${{env.MACOS_INTEL_URL}}"}]},{"@type":"OpenUri","name":"Windows Build","targets":[{"os":"default","uri":"${{env.WINDOWS_URL}}"}]}]'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          card-layout-exit: complete
+          show-on-start: false
+          show-on-exit: true
+          timezone: "Asia/Kolkata"
+          enable-view-status-action: false
+          enable-review-diffs-action: false
+          custom-facts: |
+            - name: Version
+              value: ${{ needs.determine_environment.outputs.version }}
+            - name: Changes
+              value: ${{ steps.changelog.outputs.content }}
+          custom-actions: |
+            - text: Mac ARM64 Build
+              url: "${{env.MACOS_ARM64_URL}}"
+            - text: Mac Intel Build
+              url: "${{env.MACOS_INTEL_URL}}"
+            - text: Windows Build
+              url: "${{env.WINDOWS_URL}}"
 
   create_release:
     needs: [send_notification, determine_environment]

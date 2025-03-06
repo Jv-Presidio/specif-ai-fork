@@ -249,15 +249,3 @@ jobs:
           if [[ -f "${{ env.SSH_KEY_FILE }}" ]]; then
             rm -f ${{ env.SSH_KEY_FILE }}
           fi
-
-  notify_teams:
-    needs: [determine_environment, deploy_frontend, deploy_backend]
-    uses: ./.github/workflows/teams-notification.yml
-    if: always()
-    with:
-      status: ${{ needs.deploy_frontend.result == 'success' && needs.deploy_backend.result == 'success' && 'Success' || 'Fail' }}
-      environment: ${{ needs.determine_environment.outputs.is_release == 'true' && 'production' || 'development' }}
-      stage: Deploy
-      artifact_url: ''
-    secrets:
-      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
