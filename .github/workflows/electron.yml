@@ -256,54 +256,7 @@ jobs:
           echo "✅ macOS Intel Artifact URL: $MACOS_INTEL_URL"
           echo "✅ macOS ARM64 Artifact URL: $MACOS_ARM64_URL"
 
-      # Update Development notification with download links
-      - name: Update Development Teams notification
-        if: needs.determine_environment.outputs.is_release != 'true' && success()
-        uses: toko-bifrost/ms-teams-deploy-card@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: complete
-          show-on-start: false
-          show-on-exit: true
-          timezone: "Asia/Kolkata"
-          enable-view-status-action: false
-          enable-review-diffs-action: false
-          custom-actions: |
-            - text: Mac ARM64 Build
-              url: "${{env.MACOS_ARM64_URL}}"
-            - text: Mac Intel Build
-              url: "${{env.MACOS_INTEL_URL}}"
-            - text: Windows Build
-              url: "${{env.WINDOWS_URL}}"
-
-      # Update Production notification with download links and changelog
-      - name: Update Production Teams notification
-        if: needs.determine_environment.outputs.is_release == 'true' && success()
-        uses: toko-bifrost/ms-teams-deploy-card@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: complete
-          show-on-start: false
-          show-on-exit: true
-          timezone: "Asia/Kolkata"
-          enable-view-status-action: false
-          enable-review-diffs-action: false
-          custom-facts: |
-            - name: Version
-              value: ${{ needs.determine_environment.outputs.version }}
-            - name: Release Status
-              value: "✅ Build successful"
-          custom-actions: |
-            - text: Mac ARM64 Build
-              url: "${{env.MACOS_ARM64_URL}}"
-            - text: Mac Intel Build
-              url: "${{env.MACOS_INTEL_URL}}"
-            - text: Windows Build
-              url: "${{env.WINDOWS_URL}}"
-
-      - name: Send Celebratory Release Notification
+      - name: Send Development Release Notification
         if: needs.determine_environment.outputs.is_release != 'true' && success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -448,7 +401,7 @@ jobs:
           body_path: CHANGELOG-MOD.md
           fail_on_unmatched_files: false
 
-      - name: Send Celebratory Release Notification
+      - name: Send Production Release Notification
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
@@ -626,9 +579,9 @@ jobs:
                           \"value\": \"v${BUILD_VERSION}\"
                         },
                         {
-                          \"title\": \"Status\",
-                          \"value\": \"Ready for testing\"
-                        }
+                          \"title\": \"Built at\",
+                          \"value\": \"$TIMESTAMP\"
+                        },
                       ]
                     },
                     {
