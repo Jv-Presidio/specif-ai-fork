@@ -1,0 +1,47 @@
+name: Teams Notification
+
+on:
+  workflow_call:
+    inputs:
+      status:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      stage:
+        required: true
+        type: string
+      artifact_url:
+        required: false
+        type: string
+    secrets:
+      TEAMS_WEBHOOK_URL:
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set notification content
+        id: notification
+        run: |
+          if [[ "${{ inputs.status }}" == "Success" ]]; then
+            if [[ "${{ inputs.artifact_url }}" != "" ]]; then
+              echo "sections={\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Artifacts\",\"value\":\"[Download Build Artifacts](${{ inputs.artifact_url }})\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+            else
+              echo "sections={\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "sections={\"activityTitle\":\"Status: Fail\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"❌ ${{ inputs.stage }} failed\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Teams Notification
+        uses: aliencube/microsoft-teams-actions@v0.8.0
+        if: always()
+        with:
+          webhook_uri: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          title: "${{ inputs.environment }} ${{ inputs.stage }}"
+          summary: "Status: ${{ inputs.status }}"
+          sections: ${{ steps.notification.outputs.sections }}
+          theme_color: ${{ inputs.status == 'Success' && '2EA44F' || 'E74C3C' }}

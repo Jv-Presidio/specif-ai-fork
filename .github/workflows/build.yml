@@ -142,3 +142,15 @@ jobs:
           tags: |
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:${{ steps.get-sha.outputs.COMMIT_SHA }}
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ steps.set-image-name.outputs.IMAGE_NAME }}:latest
+
+  notify_teams:
+    needs: [determine_environment, build_frontend, build_backend]
+    uses: ./.github/workflows/teams-notification.yml
+    if: always()
+    with:
+      status: ${{ needs.build_frontend.result == 'success' && needs.build_backend.result == 'success' && 'Success' || 'Fail' }}
+      environment: ${{ needs.determine_environment.outputs.environment }}
+      stage: 'Build'
+      artifact_url: ${{ needs.build_frontend.result == 'success' && needs.build_backend.result == 'success' && format('https://github.com/{0}/actions/runs/{1}/artifacts', github.repository, github.run_id) || '' }}
+    secrets:
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
