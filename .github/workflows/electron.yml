@@ -271,12 +271,13 @@ jobs:
           echo "✅ macOS ARM64 Artifact URL: $MACOS_ARM64_URL"
 
       # Update Development notification with download links
-      - if: needs.determine_environment.outputs.is_release != 'true' && always()
+      - name: Update Development Teams notification
+        if: needs.determine_environment.outputs.is_release != 'true' && always()
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          card-layout-exit: cozy
+          card-layout-exit: complete
           show-on-start: false
           show-on-exit: true
           timezone: "Asia/Kolkata"
@@ -291,7 +292,8 @@ jobs:
               url: "${{env.WINDOWS_URL}}"
 
       # Update Production notification with download links and changelog
-      - if: needs.determine_environment.outputs.is_release == 'true' && always()
+      - name: Update Production Teams notification
+        if: needs.determine_environment.outputs.is_release == 'true' && always()
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
