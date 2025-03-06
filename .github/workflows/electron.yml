@@ -218,18 +218,19 @@ jobs:
           echo "intel_dmg_name=$INTEL_FILENAME" >> $GITHUB_OUTPUT
           echo "arm_dmg_name=$ARM_FILENAME" >> $GITHUB_OUTPUT
 
-  send_notification:
-    needs: [build_electron_mac, build_electron_windows, determine_environment]
+  notification_content:
+    needs: [determine_environment]
     runs-on: ubuntu-latest
+    if: needs.determine_environment.outputs.is_release == 'true'
     permissions:
       actions: read
       contents: read
+    outputs:
+      content: ${{ steps.changelog.outputs.content }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Get Changelog Content
-        if: needs.determine_environment.outputs.is_release == 'true'
         id: changelog
         run: |
           VERSION="${{ needs.determine_environment.outputs.version }}"
@@ -238,6 +239,20 @@ jobs:
           CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\n'/'%0A'}"
           CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\r'/'%0D'}"
           echo "content=$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+
+  send_notification:
+    needs:
+      [
+        build_electron_mac,
+        build_electron_windows,
+        determine_environment,
+        notification_content,
+      ]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
       - name: Generate Artifact Download Links
         id: generate-links
         env:
@@ -303,7 +318,7 @@ jobs:
             - name: Version
               value: ${{ needs.determine_environment.outputs.version }}
             - name: Changes
-              value: ${{ steps.changelog.outputs.content }}
+              value: "${{ needs.notification_content.outputs.content }}"
           custom-actions: |
             - text: Mac ARM64 Build
               url: "${{env.MACOS_ARM64_URL}}"
