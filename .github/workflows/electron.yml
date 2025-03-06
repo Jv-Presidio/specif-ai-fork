@@ -226,6 +226,9 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Generate Artifact Download Links
         id: generate-links
         env:
