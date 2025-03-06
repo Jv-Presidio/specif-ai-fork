@@ -327,11 +327,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.determine_environment.outputs.version }}"
-          CHANGELOG=$(awk -v ver="## [$VERSION]" '
-            $0 ~ ver {p=1;next}
-            /^## \[/ {p=0}
-            p {print}
-          ' CHANGELOG.md)
+          CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
 
           gh release create v$VERSION \
             --draft \
