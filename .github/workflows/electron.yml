@@ -233,16 +233,11 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ needs.determine_environment.outputs.version }}"
-          CHANGELOG_CONTENT=$(awk -v ver="## [$VERSION]" '
-            $0 ~ ver {p=1;next}
-            /^## \[/ {p=0}
-            p {print}
-          ' CHANGELOG.md)
+          CHANGELOG_CONTENT=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
           CHANGELOG_CONTENT="${CHANGELOG_CONTENT//'%'/'%25'}"
           CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\n'/'%0A'}"
           CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\r'/'%0D'}"
           echo "content=$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-
       - name: Generate Artifact Download Links
         id: generate-links
         env:
