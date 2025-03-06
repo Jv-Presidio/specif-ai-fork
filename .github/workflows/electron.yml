@@ -272,7 +272,7 @@ jobs:
 
       # Update Development notification with download links
       - name: Update Development Teams notification
-        if: needs.determine_environment.outputs.is_release != 'true' && always()
+        if: needs.determine_environment.outputs.is_release != 'true' && success()
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -293,7 +293,7 @@ jobs:
 
       # Update Production notification with download links and changelog
       - name: Update Production Teams notification
-        if: needs.determine_environment.outputs.is_release == 'true' && always()
+        if: needs.determine_environment.outputs.is_release == 'true' && success()
         uses: toko-bifrost/ms-teams-deploy-card@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
