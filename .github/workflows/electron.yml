@@ -363,6 +363,12 @@ jobs:
           ls -la release-assets/
           echo "Total files: $(find release-assets -type f | wc -l)"
 
+      - name: Modify Changelog
+        run: |
+          VERSION="${{ needs.determine_environment.outputs.version }}"
+          CHANGELOG_CONTENT=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
+          echo "$CHANGELOG_CONTENT" > CHANGELOG-MOD.md
+
       - name: Create Release with Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -372,5 +378,5 @@ jobs:
           draft: true
           files: |
             release-assets/*
-          body_path: CHANGELOG.md
+          body_path: CHANGELOG-MOD.md
           fail_on_unmatched_files: false
