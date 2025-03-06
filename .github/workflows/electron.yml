@@ -328,7 +328,13 @@ jobs:
               url: "${{env.WINDOWS_URL}}"
 
   create_release:
-    needs: [send_notification, determine_environment]
+    needs:
+      [
+        send_notification,
+        determine_environment,
+        build_electron_windows,
+        build_electron_mac,
+      ]
     if: needs.determine_environment.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -337,14 +343,37 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Release Draft
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ needs.determine_environment.outputs.version }}"
-          CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-electron-build
+          path: release-assets
 
-          gh release create v$VERSION \
-            --draft \
-            --title "Release v$VERSION" \
-            --notes "$CHANGELOG"
+      - name: Download macOS Intel Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-intel-build
+          path: release-assets
+
+      - name: Download macOS ARM64 Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64-build
+          path: release-assets
+
+      - name: Display downloaded assets
+        run: |
+          ls -la release-assets/
+          echo "Total files: $(find release-assets -type f | wc -l)"
+
+      - name: Create Release with Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: v${{ needs.determine_environment.outputs.version }}
+          name: Release v${{ needs.determine_environment.outputs.version }}
+          draft: true
+          files: |
+            release-assets/*
+          body_path: CHANGELOG.md
+          fail_on_unmatched_files: false
