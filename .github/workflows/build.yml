@@ -149,8 +149,8 @@ jobs:
     if: always()
     with:
       status: ${{ needs.build_frontend.result == 'success' && needs.build_backend.result == 'success' && 'Success' || 'Fail' }}
-      environment: ${{ needs.determine_environment.outputs.environment }}
-      stage: 'Build'
-      artifact_url: ${{ needs.build_frontend.result == 'success' && needs.build_backend.result == 'success' && format('https://github.com/{0}/actions/runs/{1}/artifacts', github.repository, github.run_id) || '' }}
+      environment: development
+      stage: Build
+      artifact_url: ${{ needs.build_frontend.result == 'success' && needs.build_backend.result == 'success' && format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) || '' }}
     secrets:
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}

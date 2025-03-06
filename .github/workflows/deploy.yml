@@ -256,8 +256,8 @@ jobs:
     if: always()
     with:
       status: ${{ needs.deploy_frontend.result == 'success' && needs.deploy_backend.result == 'success' && 'Success' || 'Fail' }}
-      environment: ${{ needs.determine_environment.outputs.environment }}
-      stage: 'Deploy'
+      environment: ${{ needs.determine_environment.outputs.is_release == 'true' && 'production' || 'development' }}
+      stage: Deploy
       artifact_url: ''
     secrets:
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}

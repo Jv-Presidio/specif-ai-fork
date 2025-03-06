@@ -28,12 +28,12 @@ jobs:
         run: |
           if [[ "${{ inputs.status }}" == "Success" ]]; then
             if [[ "${{ inputs.artifact_url }}" != "" ]]; then
-              echo "sections={\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Artifacts\",\"value\":\"[Download Build Artifacts](${{ inputs.artifact_url }})\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+              echo "sections=[{\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Artifacts\",\"value\":\"[Download Build Artifacts](${{ inputs.artifact_url }})\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}]" >> $GITHUB_OUTPUT
             else
-              echo "sections={\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+              echo "sections=[{\"activityTitle\":\"Status: Success\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"✅ ${{ inputs.stage }} completed successfully\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}]" >> $GITHUB_OUTPUT
             fi
           else
-            echo "sections={\"activityTitle\":\"Status: Fail\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"❌ ${{ inputs.stage }} failed\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}" >> $GITHUB_OUTPUT
+            echo "sections=[{\"activityTitle\":\"Status: Fail\",\"activitySubtitle\":\"${{ inputs.stage }} - Environment: ${{ inputs.environment }}\",\"facts\":[{\"name\":\"Status\",\"value\":\"❌ ${{ inputs.stage }} failed\"},{\"name\":\"Repository\",\"value\":\"${{ github.repository }}\"},{\"name\":\"Branch\",\"value\":\"${{ github.ref_name }}\"}]}]" >> $GITHUB_OUTPUT
           fi
 
       - name: Send Teams Notification
