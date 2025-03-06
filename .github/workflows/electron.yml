@@ -300,6 +300,63 @@ jobs:
             - text: Windows Build
               url: "${{env.WINDOWS_URL}}"
 
+      - name: Send Celebratory Release Notification
+        if: needs.determine_environment.outputs.is_release != 'true' && success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+        run: |
+          # Get artifact IDs for download links
+          WINDOWS_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="windows-electron-build") | .id')
+          MACOS_INTEL_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-intel-build") | .id')
+          MACOS_ARM64_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-arm64-build") | .id')
+
+          WINDOWS_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${WINDOWS_ARTIFACT_ID}"
+          MACOS_INTEL_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_INTEL_ARTIFACT_ID}"
+          MACOS_ARM64_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_ARM64_ARTIFACT_ID}"
+
+          # Prepare the simple notification with download links
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"type\": \"AdaptiveCard\",
+                  \"version\": \"1.5\",
+                  \"body\": [
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"✅ Development Build Successful\",
+                      \"weight\": \"Bolder\",
+                      \"size\": \"Medium\"
+                    },
+                    {
+                      \"type\": \"ActionSet\",
+                      \"actions\": [
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"Windows Build\",
+                          \"url\": \"$WINDOWS_URL\"
+                        },
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"Mac Intel Build\",
+                          \"url\": \"$MACOS_INTEL_URL\"
+                        },
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"Mac ARM64 Build\",
+                          \"url\": \"$MACOS_ARM64_URL\"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }" $NOTIFICATION_URL
+
   create_release:
     needs:
       [
@@ -356,3 +413,236 @@ jobs:
             release-assets/*
           body_path: CHANGELOG-MOD.md
           fail_on_unmatched_files: false
+
+      - name: Send Celebratory Release Notification
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          BUILD_VERSION: ${{ needs.determine_environment.outputs.version }}
+        run: |
+          echo "Preparing release notification for v${BUILD_VERSION}"
+
+          # Get artifact IDs for download links
+          WINDOWS_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="windows-electron-build") | .id')
+          MACOS_INTEL_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-intel-build") | .id')
+          MACOS_ARM64_ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts --jq '.artifacts[] | select(.name=="macos-arm64-build") | .id')
+
+          WINDOWS_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${WINDOWS_ARTIFACT_ID}"
+          MACOS_INTEL_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_INTEL_ARTIFACT_ID}"
+          MACOS_ARM64_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${MACOS_ARM64_ARTIFACT_ID}"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/v${BUILD_VERSION}"
+
+          # Make sure we have artifact URLs
+          if [[ -z "$WINDOWS_ARTIFACT_ID" || "$WINDOWS_ARTIFACT_ID" == "null" ]]; then
+            echo "⚠️ WARNING: Windows artifact ID not found"
+          else
+            echo "✅ Windows artifact URL: $WINDOWS_URL"
+          fi
+
+          # Fetch random celebration GIF
+          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=0UTRbFtkMxAplrohufYco5IY74U8hOes&tag=celebration+success&rating=g" | jq -r '.data.images.original.url')
+          echo "🎉 Selected GIF: $RANDOM_GIF"
+
+          # Using sed instead of awk to process the changelog sections
+          echo "Processing changelog using sed..."
+
+          # Create a temporary file to store the processed changelog
+          TEMP_CHANGELOG=$(mktemp)
+
+          # Extract each section from the changelog
+          SECTION_TITLES=$(grep "^### " CHANGELOG-MOD.md | sed 's/^### //')
+
+          # Initialize the formatted changelog
+          FORMATTED_CHANGELOG=""
+
+          # Process each section
+          for SECTION in $SECTION_TITLES; do
+            echo "Processing section: $SECTION"
+            
+            # Create pattern for this section header
+            SECTION_PATTERN="### $SECTION"
+            
+            # Create a numbered temporary file with the specific section content
+            SECTION_FILE=$(mktemp)
+            
+            # Extract content between this section and the next section
+            sed -n "/^${SECTION_PATTERN}$/,/^### /p" CHANGELOG-MOD.md | 
+              sed "1d;/^### /d" > "$SECTION_FILE"
+            
+            # Skip empty sections
+            if [[ ! -s "$SECTION_FILE" ]]; then
+              echo "  - Section is empty, skipping"
+              rm "$SECTION_FILE"
+              continue
+            fi
+            
+            # Add section header
+            SECTION_MARKDOWN="**${SECTION}**\\n"
+            
+            # Process each line in the section
+            while IFS= read -r LINE; do
+              # Skip empty lines
+              if [[ -z "$LINE" ]]; then
+                continue
+              fi
+              
+              # Format bullet points
+              if [[ "$LINE" =~ ^-\ .*$ ]]; then
+                # Replace "- " with bullet points
+                FORMATTED_LINE="• ${LINE:2}"
+                SECTION_MARKDOWN="${SECTION_MARKDOWN}${FORMATTED_LINE}\\n"
+              else
+                SECTION_MARKDOWN="${SECTION_MARKDOWN}${LINE}\\n"
+              fi
+            done < "$SECTION_FILE"
+            
+            # Add section to the formatted changelog
+            FORMATTED_CHANGELOG="${FORMATTED_CHANGELOG}${SECTION_MARKDOWN}\\n"
+            
+            # Clean up the section file
+            rm "$SECTION_FILE"
+          done
+
+          # Debug: Check what we got
+          echo "Formatted changelog length: ${#FORMATTED_CHANGELOG}"
+          echo "Formatted changelog preview: ${FORMATTED_CHANGELOG:0:100}..."
+
+          # If for some reason we still don't have a changelog, create a simple one
+          if [[ -z "$FORMATTED_CHANGELOG" ]]; then
+            echo "WARNING: Failed to extract changelog sections, using a simplified approach"
+            # Simplified changelog extraction
+            FORMATTED_CHANGELOG=$(cat CHANGELOG-MOD.md | 
+              sed 's/^### /***/g' | 
+              sed 's/^- /• /g' | 
+              tr '\n' ' ' | 
+              sed 's/ \+/ /g' | 
+              sed 's/\*/\\n**/g')
+          fi
+
+          # Escape double quotes and other special chars
+          FORMATTED_CHANGELOG=$(echo "$FORMATTED_CHANGELOG" | sed 's/"/\\"/g')
+
+          # Make sure notification URL is set
+          if [[ -z "$NOTIFICATION_URL" ]]; then
+            echo "❌ ERROR: NOTIFICATION_URL is not set."
+            exit 1
+          fi
+
+          # Prepare the notification with UI components
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"type\": \"AdaptiveCard\",
+                  \"version\": \"1.5\",
+                  \"body\": [
+                    {
+                      \"type\": \"ColumnSet\",
+                      \"columns\": [
+                        {
+                          \"type\": \"Column\",
+                          \"width\": \"auto\",
+                          \"items\": [
+                            {
+                              \"type\": \"Image\",
+                              \"url\": \"https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\",
+                              \"size\": \"Small\",
+                              \"style\": \"Person\"
+                            }
+                          ]
+                        },
+                        {
+                          \"type\": \"Column\",
+                          \"width\": \"stretch\",
+                          \"items\": [
+                            {
+                              \"type\": \"TextBlock\",
+                              \"text\": \"Release Announcement\",
+                              \"size\": \"Medium\",
+                              \"weight\": \"Bolder\"
+                            },
+                            {
+                              \"type\": \"TextBlock\",
+                              \"text\": \"Specifai v${BUILD_VERSION}\",
+                              \"size\": \"Small\",
+                              \"isSubtle\": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"🎉 A new release is ready for download!\",
+                      \"wrap\": true,
+                      \"size\": \"Medium\"
+                    },
+                    {
+                      \"type\": \"Image\",
+                      \"url\": \"$RANDOM_GIF\",
+                      \"horizontalAlignment\": \"center\",
+                      \"size\": \"Large\"
+                    },
+                    {
+                      \"type\": \"FactSet\",
+                      \"facts\": [
+                        {
+                          \"title\": \"Version\",
+                          \"value\": \"v${BUILD_VERSION}\"
+                        },
+                        {
+                          \"title\": \"Status\",
+                          \"value\": \"Ready for testing\"
+                        }
+                      ]
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"**What's New**\",
+                      \"wrap\": true,
+                      \"weight\": \"Bolder\",
+                      \"size\": \"Medium\"
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"${FORMATTED_CHANGELOG}\",
+                      \"wrap\": true,
+                      \"isSubtle\": false,
+                      \"separator\": true
+                    },
+                    {
+                      \"type\": \"ActionSet\",
+                      \"actions\": [
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"Windows Download\",
+                          \"url\": \"$WINDOWS_URL\",
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/888/888882.png\"
+                        },
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"macOS Intel\",
+                          \"url\": \"$MACOS_INTEL_URL\",
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
+                        },
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"macOS ARM64\",
+                          \"url\": \"$MACOS_ARM64_URL\",
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
+                        },
+                        {
+                          \"type\": \"Action.OpenUrl\",
+                          \"title\": \"Full Release Notes\",
+                          \"url\": \"$RELEASE_URL\",
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/25/25284.png\"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }" $NOTIFICATION_URL
