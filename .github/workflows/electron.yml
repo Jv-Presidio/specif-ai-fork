@@ -474,7 +474,7 @@ jobs:
           fi
 
           # Fetch random celebration GIF
-          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=0UTRbFtkMxAplrohufYco5IY74U8hOes&tag=celebration+sports&rating=g" | jq -r '.data.images.original.webp')
+          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=${{secrets.GIPHY_API_KEY}}&tag=celebration+sports&rating=g" | jq -r '.data.images.original.webp')
 
           # Using sed instead of awk to process the changelog sections
           echo "Processing changelog using sed..."
