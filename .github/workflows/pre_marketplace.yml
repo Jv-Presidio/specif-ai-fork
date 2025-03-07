@@ -116,7 +116,7 @@ jobs:
                         },
                         {
                           title: "Repository",
-                          value: ("JarvisAccount" + $repo)
+                          value: ("JarvisAccount - ECR - " + $repo)
                         }
                       ]
                     },

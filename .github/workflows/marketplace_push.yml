@@ -124,7 +124,7 @@ jobs:
                         },
                         {
                           title: "Repository",
-                          value: ("OfficialPresidioAccount/" + $repo)
+                          value: ("OfficialPresidioAccount - ECR - " + $repo)
                         }
                       ]
                     }
