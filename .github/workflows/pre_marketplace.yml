@@ -77,7 +77,7 @@ jobs:
 
       - name: Send Teams Notification
         env:
-          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL }}
         run: |
           if [[ -z "$NOTIFICATION_URL" ]]; then
             echo "❌ ERROR: NOTIFICATION_URL is not set"

@@ -55,23 +55,23 @@ jobs:
         run: |
           # Set variables based on environment
           if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
-            echo "SERVER=${{ secrets.DEV_SERVER_IP }}" >> $GITHUB_OUTPUT
-            echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
-            echo "APP_PASSCODE_KEY=${{ secrets.DEV_APP_PASSCODE_KEY }}" >> $GITHUB_OUTPUT
-            echo "DEFAULT_API_PROVIDER=${{ secrets.DEV_DEFAULT_API_PROVIDER }}" >> $GITHUB_OUTPUT
-            echo "DEFAULT_MODEL=${{ secrets.DEV_DEFAULT_MODEL }}" >> $GITHUB_OUTPUT
-            echo "AZURE_OPENAI_API_KEY=${{ secrets.DEV_AZURE_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
-            echo "OPENAI_API_VERSION=${{ secrets.DEV_OPENAI_API_VERSION }}" >> $GITHUB_OUTPUT
-            echo "OPENAI_API_KEY=${{ secrets.DEV_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
-            echo "OPENAI_BASE_URL=${{ secrets.DEV_OPENAI_BASE_URL }}" >> $GITHUB_OUTPUT
-            echo "ANTHROPIC_BASE_URL=${{ secrets.DEV_ANTHROPIC_BASE_URL }}" >> $GITHUB_OUTPUT
-            echo "ANTHROPIC_API_KEY=${{ secrets.DEV_ANTHROPIC_API_KEY }}" >> $GITHUB_OUTPUT
-            echo "ANTHROPIC_BEDROCK_BASE_URL=${{ secrets.DEV_ANTHROPIC_BEDROCK_BASE_URL }}" >> $GITHUB_OUTPUT
-            echo "AWS_BEDROCK_ACCESS_KEY=${{ secrets.DEV_AWS_BEDROCK_ACCESS_KEY }}" >> $GITHUB_OUTPUT
-            echo "AWS_BEDROCK_SECRET_KEY=${{ secrets.DEV_AWS_BEDROCK_SECRET_KEY }}" >> $GITHUB_OUTPUT
-            echo "AWS_BEDROCK_SESSION_TOKEN=${{ secrets.DEV_AWS_BEDROCK_SESSION_TOKEN }}" >> $GITHUB_OUTPUT
-            echo "AWS_BEDROCK_REGION=${{ secrets.DEV_AWS_BEDROCK_REGION }}" >> $GITHUB_OUTPUT
-            echo "ENABLE_SENTRY=${{ secrets.DEV_ENABLE_SENTRY }}" >> $GITHUB_OUTPUT
+            echo "SERVER=${{ secrets.PROD_SERVER_IP }}" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=${{ secrets.PROD_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+            echo "APP_PASSCODE_KEY=${{ secrets.PROD_APP_PASSCODE_KEY }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_API_PROVIDER=${{ secrets.PROD_DEFAULT_API_PROVIDER }}" >> $GITHUB_OUTPUT
+            echo "DEFAULT_MODEL=${{ secrets.PROD_DEFAULT_MODEL }}" >> $GITHUB_OUTPUT
+            echo "AZURE_OPENAI_API_KEY=${{ secrets.PROD_AZURE_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_VERSION=${{ secrets.PROD_OPENAI_API_VERSION }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_API_KEY=${{ secrets.PROD_OPENAI_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "OPENAI_BASE_URL=${{ secrets.PROD_OPENAI_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BASE_URL=${{ secrets.PROD_ANTHROPIC_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_API_KEY=${{ secrets.PROD_ANTHROPIC_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "ANTHROPIC_BEDROCK_BASE_URL=${{ secrets.PROD_ANTHROPIC_BEDROCK_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_ACCESS_KEY=${{ secrets.PROD_AWS_BEDROCK_ACCESS_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SECRET_KEY=${{ secrets.PROD_AWS_BEDROCK_SECRET_KEY }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_SESSION_TOKEN=${{ secrets.PROD_AWS_BEDROCK_SESSION_TOKEN }}" >> $GITHUB_OUTPUT
+            echo "AWS_BEDROCK_REGION=${{ secrets.PROD_AWS_BEDROCK_REGION }}" >> $GITHUB_OUTPUT
+            echo "ENABLE_SENTRY=${{ secrets.PROD_ENABLE_SENTRY }}" >> $GITHUB_OUTPUT
             echo "SENTRY_ENVIRONMENT=development" >> $GITHUB_OUTPUT
             echo "Deploying to production environment"
           else

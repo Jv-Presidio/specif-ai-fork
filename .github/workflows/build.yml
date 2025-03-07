@@ -94,7 +94,7 @@ jobs:
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             if [[ "${{ needs.determine_environment.outputs.is_release }}" == "true" ]]; then
               # For release commits on main
-              echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT
+              echo "IMAGE_NAME=${{ secrets.PROD_IMAGE_NAME }}" >> $GITHUB_OUTPUT
             else
               # For regular commits on main
               echo "IMAGE_NAME=${{ secrets.DEV_IMAGE_NAME }}" >> $GITHUB_OUTPUT

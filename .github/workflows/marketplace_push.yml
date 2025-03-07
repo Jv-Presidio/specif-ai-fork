@@ -1,39 +1,25 @@
 name: Push to Marketplace
 
 on:
-  workflow_call:
-    inputs:
-      version:
-        required: true
-        type: string
-      staging_account_id:
-        required: true
-        type: string
-      confirm_push:
-        type: boolean
-        required: true
-        description: "Confirm push to marketplace"
   workflow_dispatch:
-    inputs:
-      version:
-        required: true
-        type: string
-      staging_account_id:
-        required: true
-        type: string
-      confirm_push:
-        type: boolean
-        required: true
-        description: "Confirm push to marketplace"
 
 jobs:
   push_to_marketplace:
-    if: ${{ inputs.confirm_push }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from package.json
+        id: get-version
+        run: |
+          VERSION=$(node -e "console.log(require('./package.json').version);")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version: $VERSION"
+
       - name: Configure AWS credentials for staging
         id: aws-credentials-staging
         uses: aws-actions/configure-aws-credentials@v4
@@ -42,15 +28,20 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}-staging
 
+      - name: Extract staging account ID
+        id: extract-staging-account
+        run: |
+          STAGING_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          echo "::add-mask::$STAGING_ACCOUNT_ID"
+          echo "STAGING_ACCOUNT_ID=$STAGING_ACCOUNT_ID" >> $GITHUB_ENV
+
       - name: Pull from staging ECR
         run: |
-          VERSION="${{ inputs.version }}"
-
           # Authenticate with Staging ECR
-          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${STAGING_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
 
           # Pull from staging ECR
-          docker pull ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION}
+          docker pull ${STAGING_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION}
 
       - name: Configure AWS credentials for marketplace
         id: aws-credentials-marketplace
@@ -62,20 +53,18 @@ jobs:
 
       - name: Push to Marketplace ECR
         run: |
-          VERSION="${{ inputs.version }}"
-
           # Get marketplace account ID
           MARKETPLACE_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
           # Run security scan
           echo "Running final security scan..."
-          trivy image ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION}
+          trivy image ${STAGING_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION}
 
           # Authenticate with Marketplace ECR
           aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
 
           # Tag and push to marketplace
-          docker tag ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION} \
+          docker tag ${STAGING_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION} \
             ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}:${VERSION}
 
           docker push ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}:${VERSION}
@@ -85,7 +74,7 @@ jobs:
 
       - name: Send Teams Notification
         env:
-          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL }}
         run: |
           if [[ -z "$NOTIFICATION_URL" ]]; then
             echo "❌ ERROR: NOTIFICATION_URL is not set"
@@ -94,7 +83,7 @@ jobs:
 
           # Create JSON payload using jq
           JSON_PAYLOAD=$(jq -n \
-            --arg version "${{ inputs.version }}" \
+            --arg version "${VERSION}" \
             --arg repo "${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}" \
             '{
               type: "message",

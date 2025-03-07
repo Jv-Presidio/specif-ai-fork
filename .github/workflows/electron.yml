@@ -260,7 +260,7 @@ jobs:
         if: needs.determine_environment.outputs.is_release != 'true' && success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL }}
           BUILD_VERSION: ${{ needs.determine_environment.outputs.version }}
         run: |
           # Get artifact IDs for download links
@@ -404,7 +404,7 @@ jobs:
       - name: Send Production Release Notification
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL }}
           BUILD_VERSION: ${{ needs.determine_environment.outputs.version }}
         run: |
           echo "Preparing release notification for v${BUILD_VERSION}"

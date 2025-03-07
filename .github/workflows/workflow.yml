@@ -72,16 +72,6 @@ jobs:
       version: ${{ needs.determine_workflow.outputs.version }}
     secrets: inherit
 
-  marketplace_push_flow:
-    needs: [determine_workflow, pre_marketplace_flow]
-    if: needs.determine_workflow.outputs.workflow_type == 'release'
-    uses: ./.github/workflows/marketplace_push.yml
-    with:
-      version: ${{ needs.determine_workflow.outputs.version }}
-      staging_account_id: ${{ needs.pre_marketplace_flow.outputs.staging_account_id }}
-      confirm_push: false
-    secrets: inherit
-
   electron_flow:
     needs: [determine_workflow, deploy_flow]
     uses: ./.github/workflows/electron.yml
