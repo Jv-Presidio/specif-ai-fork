@@ -55,25 +55,9 @@ jobs:
           # Build Docker image
           docker build --build-arg BUILD_ENV=$BUILD_ENV --no-cache --progress=plain -t ${IMAGE_NAME}:$VERSION .
 
-          # Run Trivy scan and capture results
+          # Run security scan
           echo "Running security scan..."
-          TRIVY_JSON=$(trivy image ${IMAGE_NAME}:$VERSION --format json)
-          
-          # Extract vulnerability counts
-          CRITICAL_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="CRITICAL")] | length')
-          HIGH_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="HIGH")] | length')
-          MEDIUM_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="MEDIUM")] | length')
-          
-          # Save counts for notification
-          echo "TRIVY_CRITICAL=$CRITICAL_COUNT" >> $GITHUB_ENV
-          echo "TRIVY_HIGH=$HIGH_COUNT" >> $GITHUB_ENV
-          echo "TRIVY_MEDIUM=$MEDIUM_COUNT" >> $GITHUB_ENV
-          
-          # Extract top vulnerabilities for details
-          TOP_VULNERABILITIES=$(echo "$TRIVY_JSON" | jq -r '..[].Vulnerabilities[] | select(.Severity=="CRITICAL" or .Severity=="HIGH") | "• [\(.VulnerabilityID)](\(.PrimaryURL)) - \(.Title) (\(.Severity))" | head -n 5' | awk '{printf "%s\\\\n", $0}')
-          echo "TRIVY_TOP_VULNS<<EOF" >> $GITHUB_ENV
-          echo "$TOP_VULNERABILITIES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          trivy image ${IMAGE_NAME}:$VERSION
 
           # Get AWS account ID for outputs
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
@@ -100,18 +84,10 @@ jobs:
             exit 1
           fi
 
-          # Prepare vulnerability summary
-          VULN_SUMMARY="🔒 Security Scan Results:\\n"
-          VULN_SUMMARY+="• Critical: ${{ env.TRIVY_CRITICAL }}\\n"
-          VULN_SUMMARY+="• High: ${{ env.TRIVY_HIGH }}\\n"
-          VULN_SUMMARY+="• Medium: ${{ env.TRIVY_MEDIUM }}"
-
           # Create JSON payload using jq
           JSON_PAYLOAD=$(jq -n \
             --arg version "${{ inputs.version }}" \
             --arg repo "${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}" \
-            --arg vuln_summary "$VULN_SUMMARY" \
-            --arg vuln_details "${{ env.TRIVY_TOP_VULNS }}" \
             '{
               type: "message",
               attachments: [{
@@ -143,39 +119,6 @@ jobs:
                           value: ("JarvisAccount" + $repo)
                         }
                       ]
-                    },
-                    {
-                      type: "TextBlock",
-                      text: $vuln_summary,
-                      wrap: true,
-                      spacing: "Medium"
-                    },
-                    {
-                      type: "Container",
-                      style: "emphasis",
-                      items: [
-                        {
-                          type: "TextBlock",
-                          text: "🔍 Top Vulnerabilities:",
-                          weight: "Bolder"
-                        },
-                        {
-                          type: "TextBlock",
-                          text: $vuln_details,
-                          wrap: true,
-                          size: "Small"
-                        }
-                      ],
-                      isVisible: false,
-                      id: "vulnDetails"
-                    },
-                    {
-                      type: "ActionSet",
-                      actions: [{
-                        type: "Action.ToggleVisibility",
-                        title: "Toggle Vulnerability Details",
-                        targetElements: ["vulnDetails"]
-                      }]
                     },
                     {
                       type: "TextBlock",
