@@ -1,0 +1,132 @@
+name: Push to Marketplace
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      staging_account_id:
+        required: true
+        type: string
+      confirm_push:
+        type: boolean
+        required: true
+        description: "Confirm push to marketplace"
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+      staging_account_id:
+        required: true
+        type: string
+      confirm_push:
+        type: boolean
+        required: true
+        description: "Confirm push to marketplace"
+
+jobs:
+  push_to_marketplace:
+    if: ${{ inputs.confirm_push }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials for staging
+        id: aws-credentials-staging
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_STAGING_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}-staging
+
+      - name: Pull from staging ECR
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          # Authenticate with Staging ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+
+          # Pull from staging ECR
+          docker pull ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION}
+
+      - name: Configure AWS credentials for marketplace
+        id: aws-credentials-marketplace
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_MARKETPLACE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}-marketplace
+
+      - name: Push to marketplace ECR
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          # Get marketplace account ID
+          MARKETPLACE_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
+          # Authenticate with Marketplace ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+
+          # Tag and push to marketplace
+          docker tag ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION} \
+            ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}:${VERSION}
+
+          docker push ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}:${VERSION}
+
+          # Cleanup unused Docker images
+          docker image prune -af --filter "until=2h"
+
+      - name: Send Teams Notification
+        if: always()
+        env:
+          NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+        run: |
+          # Get status emoji
+          if [[ "${{ job.status }}" == "success" ]]; then
+            STATUS_EMOJI="✅"
+          else
+            STATUS_EMOJI="❌"
+          fi
+
+          # Send notification
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"type\": \"AdaptiveCard\",
+                  \"version\": \"1.5\",
+                  \"body\": [
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"${STATUS_EMOJI} Marketplace Deployment Status\",
+                      \"weight\": \"Bolder\",
+                      \"size\": \"Medium\"
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"${{ job.status == 'success' && 'Successfully deployed to AWS Marketplace.' || 'Marketplace deployment encountered an issue.' }}\",
+                      \"wrap\": true
+                    },
+                    {
+                      \"type\": \"FactSet\",
+                      \"facts\": [
+                        {
+                          \"title\": \"Version\",
+                          \"value\": \"${{ inputs.version }}\"
+                        },
+                        {
+                          \"title\": \"Repository\",
+                          \"value\": \"OfficialPresidioAccount/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}\"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }" $NOTIFICATION_URL

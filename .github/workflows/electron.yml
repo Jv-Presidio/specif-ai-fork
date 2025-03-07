@@ -26,7 +26,7 @@ jobs:
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "Production release v${{ inputs.version }}"
           else
-            echo "environment=github-development" >> $GITHUB_OUTPUT
+            echo "environment=github-specifai-development" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Development build v${{ inputs.version }}"
           fi
@@ -427,7 +427,7 @@ jobs:
           fi
 
           # Fetch random celebration GIF
-          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=${{secrets.GIPHY_API_KEY}}&tag=celebration+sports&rating=g" | jq -r '.data.images.original.webp')
+          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=${{secrets.GIPHY_API_KEY}}&tag=celebration+success&rating=g" | jq -r '.data.images.original.webp')
 
           # Using sed instead of awk to process the changelog sections
           echo "Processing changelog using sed..."
@@ -462,8 +462,8 @@ jobs:
               continue
             fi
             
-            # Add section header
-            SECTION_MARKDOWN="**${SECTION}**\\n"
+            # Add section header with extra spacing
+            SECTION_MARKDOWN="**${SECTION}**\\n\\n"
             
             # Process each line in the section
             while IFS= read -r LINE; do
@@ -472,18 +472,19 @@ jobs:
                 continue
               fi
               
-              # Format bullet points
+              # Format bullet points with extra spacing
               if [[ "$LINE" =~ ^-\ .*$ ]]; then
-                # Replace "- " with bullet points
+                # Replace "- " with bullet points and add extra newline
                 FORMATTED_LINE="• ${LINE:2}"
-                SECTION_MARKDOWN="${SECTION_MARKDOWN}${FORMATTED_LINE}\\n"
+                SECTION_MARKDOWN="${SECTION_MARKDOWN}${FORMATTED_LINE}\\n\\n"
               else
-                SECTION_MARKDOWN="${SECTION_MARKDOWN}${LINE}\\n"
+                # Add extra newline for non-bullet points
+                SECTION_MARKDOWN="${SECTION_MARKDOWN}${LINE}\\n\\n"
               fi
             done < "$SECTION_FILE"
             
-            # Add section to the formatted changelog
-            FORMATTED_CHANGELOG="${FORMATTED_CHANGELOG}${SECTION_MARKDOWN}\\n"
+            # Add section with extra spacing between sections
+            FORMATTED_CHANGELOG="${FORMATTED_CHANGELOG}${SECTION_MARKDOWN}\\n\\n\\n"
             
             # Clean up the section file
             rm "$SECTION_FILE"
@@ -496,13 +497,13 @@ jobs:
           # If for some reason we still don't have a changelog, create a simple one
           if [[ -z "$FORMATTED_CHANGELOG" ]]; then
             echo "WARNING: Failed to extract changelog sections, using a simplified approach"
-            # Simplified changelog extraction
+            # Simplified changelog extraction with proper spacing
             FORMATTED_CHANGELOG=$(cat CHANGELOG-MOD.md | 
               sed 's/^### /***/g' | 
               sed 's/^- /• /g' | 
               tr '\n' ' ' | 
               sed 's/ \+/ /g' | 
-              sed 's/\*/\\n**/g')
+              sed 's/\*/\\n\\n**/g')
           fi
 
           # Escape double quotes and other special chars
@@ -596,7 +597,8 @@ jobs:
                       \"text\": \"${FORMATTED_CHANGELOG}\",
                       \"wrap\": true,
                       \"isSubtle\": false,
-                      \"separator\": true
+                      \"separator\": true,
+                      \"spacing\": \"Large\"
                     },
                     {
                       \"type\": \"ActionSet\",

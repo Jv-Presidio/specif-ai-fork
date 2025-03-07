@@ -31,53 +31,6 @@ jobs:
             echo "Development build v${{ inputs.version }}"
           fi
 
-  # Frontend deployment job
-  deploy_frontend:
-    needs: [determine_environment]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        id: aws-credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
-          role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
-
-      - name: Download Frontend Build
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          name: frontend-build
-          workflow: build.yml
-          workflow_conclusion: success
-          path: ui/dist/ui/
-          github_token: ${{ secrets.GH_PAT_WORKFLOW_ARTIFACTS }}
-
-      - name: Deploy to S3 and Invalidate CloudFront Cache
-        run: |
-          # Set variables based on environment
-          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
-            S3_BUCKET="${{ secrets.DEV_S3_BUCKET }}"
-            CLOUDFRONT_DISTRIBUTION_ID="${{ secrets.DEV_DISTRIBUTION_ID }}"
-            echo "Deploying to production environment"
-          else
-            S3_BUCKET="${{ secrets.DEV_S3_BUCKET }}"
-            CLOUDFRONT_DISTRIBUTION_ID="${{ secrets.DEV_DISTRIBUTION_ID }}"
-            echo "Deploying to development environment"
-          fi
-
-          # Deploy to S3
-          aws s3 sync ui/dist/ui/ s3://$S3_BUCKET --delete
-
-          # Invalidate CloudFront cache
-          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
-
   # Backend deployment job
   deploy_backend:
     needs: [determine_environment]
