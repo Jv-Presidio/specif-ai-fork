@@ -60,12 +60,32 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}-marketplace
 
-      - name: Push to marketplace ECR
+      - name: Verify and Push to Marketplace ECR
         run: |
           VERSION="${{ inputs.version }}"
 
           # Get marketplace account ID
           MARKETPLACE_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
+          # Run Trivy scan on staging image
+          echo "Running final security scan..."
+          TRIVY_JSON=$(trivy image ${{ inputs.staging_account_id }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}:${VERSION} --format json)
+          
+          # Extract vulnerability counts
+          CRITICAL_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="CRITICAL")] | length')
+          HIGH_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="HIGH")] | length')
+          MEDIUM_COUNT=$(echo "$TRIVY_JSON" | jq '[..[].Vulnerabilities[] | select(.Severity=="MEDIUM")] | length')
+          
+          # Save counts for notification
+          echo "TRIVY_CRITICAL=$CRITICAL_COUNT" >> $GITHUB_ENV
+          echo "TRIVY_HIGH=$HIGH_COUNT" >> $GITHUB_ENV
+          echo "TRIVY_MEDIUM=$MEDIUM_COUNT" >> $GITHUB_ENV
+          
+          # Extract top vulnerabilities for details
+          TOP_VULNERABILITIES=$(echo "$TRIVY_JSON" | jq -r '..[].Vulnerabilities[] | select(.Severity=="CRITICAL" or .Severity=="HIGH") | "• [\(.VulnerabilityID)](\(.PrimaryURL)) - \(.Title) (\(.Severity))" | head -n 5' | awk '{printf "%s\\\\n", $0}')
+          echo "TRIVY_TOP_VULNS<<EOF" >> $GITHUB_ENV
+          echo "$TOP_VULNERABILITIES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
           # Authenticate with Marketplace ECR
           aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
@@ -80,53 +100,100 @@ jobs:
           docker image prune -af --filter "until=2h"
 
       - name: Send Teams Notification
-        if: always()
         env:
           NOTIFICATION_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
         run: |
-          # Get status emoji
-          if [[ "${{ job.status }}" == "success" ]]; then
-            STATUS_EMOJI="✅"
-          else
-            STATUS_EMOJI="❌"
+          if [[ -z "$NOTIFICATION_URL" ]]; then
+            echo "❌ ERROR: NOTIFICATION_URL is not set"
+            exit 1
           fi
 
-          # Send notification
-          curl -X POST -H 'Content-type: application/json' --data "{
-            \"type\": \"message\",
-            \"attachments\": [
-              {
-                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                \"content\": {
-                  \"type\": \"AdaptiveCard\",
-                  \"version\": \"1.5\",
-                  \"body\": [
+          # Prepare vulnerability summary
+          VULN_SUMMARY="🔒 Security Scan Results:\\n"
+          VULN_SUMMARY+="• Critical: ${{ env.TRIVY_CRITICAL }}\\n"
+          VULN_SUMMARY+="• High: ${{ env.TRIVY_HIGH }}\\n"
+          VULN_SUMMARY+="• Medium: ${{ env.TRIVY_MEDIUM }}"
+
+          # Create JSON payload using jq
+          JSON_PAYLOAD=$(jq -n \
+            --arg version "${{ inputs.version }}" \
+            --arg repo "${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}" \
+            --arg vuln_summary "$VULN_SUMMARY" \
+            --arg vuln_details "${{ env.TRIVY_TOP_VULNS }}" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  type: "AdaptiveCard",
+                  version: "1.5",
+                  body: [
                     {
-                      \"type\": \"TextBlock\",
-                      \"text\": \"${STATUS_EMOJI} Marketplace Deployment Status\",
-                      \"weight\": \"Bolder\",
-                      \"size\": \"Medium\"
+                      type: "TextBlock",
+                      text: "✅ Marketplace Deployment Status",
+                      weight: "Bolder",
+                      size: "Medium"
                     },
                     {
-                      \"type\": \"TextBlock\",
-                      \"text\": \"${{ job.status == 'success' && 'Successfully deployed to AWS Marketplace.' || 'Marketplace deployment encountered an issue.' }}\",
-                      \"wrap\": true
+                      type: "TextBlock",
+                      text: "Successfully deployed to AWS Marketplace.",
+                      wrap: true
                     },
                     {
-                      \"type\": \"FactSet\",
-                      \"facts\": [
+                      type: "FactSet",
+                      facts: [
                         {
-                          \"title\": \"Version\",
-                          \"value\": \"${{ inputs.version }}\"
+                          title: "Version",
+                          value: $version
                         },
                         {
-                          \"title\": \"Repository\",
-                          \"value\": \"OfficialPresidioAccount/${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}/${{ secrets.AWS_MARKETPLACE_REPO_NAME }}\"
+                          title: "Repository",
+                          value: ("OfficialPresidioAccount/" + $repo)
                         }
                       ]
+                    },
+                    {
+                      type: "TextBlock",
+                      text: $vuln_summary,
+                      wrap: true,
+                      spacing: "Medium"
+                    },
+                    {
+                      type: "Container",
+                      style: "emphasis",
+                      items: [
+                        {
+                          type: "TextBlock",
+                          text: "🔍 Top Vulnerabilities:",
+                          weight: "Bolder"
+                        },
+                        {
+                          type: "TextBlock",
+                          text: $vuln_details,
+                          wrap: true,
+                          size: "Small"
+                        }
+                      ],
+                      isVisible: false,
+                      id: "vulnDetails"
+                    },
+                    {
+                      type: "ActionSet",
+                      actions: [{
+                        type: "Action.ToggleVisibility",
+                        title: "Toggle Vulnerability Details",
+                        targetElements: ["vulnDetails"]
+                      }]
                     }
                   ]
                 }
-              }
-            ]
-          }" $NOTIFICATION_URL
+              }]
+            }')
+
+          # Send notification
+          curl -X POST \
+            -H 'Content-type: application/json' \
+            --fail \
+            --silent \
+            --show-error \
+            --data "$JSON_PAYLOAD" "$NOTIFICATION_URL"
