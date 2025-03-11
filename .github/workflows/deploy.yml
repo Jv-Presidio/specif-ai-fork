@@ -15,7 +15,6 @@ on:
         description: 'Either "development" or "production"'
 
 jobs:
-  # Backend deployment job
   deploy_backend:
     runs-on: ubuntu-latest
     permissions:

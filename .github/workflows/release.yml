@@ -75,6 +75,7 @@ jobs:
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
       workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
+      environment: ${{ needs.determine_workflow.outputs.environment }}
     secrets: inherit
 
   create_release:
