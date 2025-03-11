@@ -19,7 +19,6 @@ on:
         default: false
         type: boolean
 
-
 jobs:
   determine_workflow:
     runs-on: ubuntu-latest
@@ -84,8 +83,6 @@ jobs:
     uses: ./.github/workflows/create-release.yml
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   pre_marketplace:
     needs: [determine_workflow, deploy]
@@ -121,5 +118,4 @@ jobs:
     secrets:
       MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL }}
       MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
