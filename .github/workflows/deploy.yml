@@ -9,31 +9,14 @@ on:
       version:
         required: true
         type: string
+      environment:
+        required: true
+        type: string
+        description: 'Either "development" or "production"'
 
 jobs:
-  determine_environment:
-    runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.set-env.outputs.environment }}
-      version: ${{ inputs.version }}
-      is_release: ${{ steps.set-env.outputs.is_release }}
-    steps:
-      - name: Determine environment and release type
-        id: set-env
-        run: |
-          if [[ "${{ inputs.workflow_type }}" == "release" ]]; then
-            echo "environment=production" >> $GITHUB_OUTPUT
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "Production release v${{ inputs.version }}"
-          else
-            echo "environment=development" >> $GITHUB_OUTPUT
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Development build v${{ inputs.version }}"
-          fi
-
   # Backend deployment job
   deploy_backend:
-    needs: [determine_environment]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -53,7 +36,7 @@ jobs:
       - name: Force new deployment of ECS service
         run: |
           # Set environment-specific variables
-          if [[ "${{ needs.determine_environment.outputs.environment }}" == "production" ]]; then
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
             CLUSTER_NAME="${{ secrets.PROD_ECS_CLUSTER_NAME }}"
             SERVICE_NAME="${{ secrets.PROD_ECS_SERVICE_NAME }}"
           else
