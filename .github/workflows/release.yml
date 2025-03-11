@@ -1,0 +1,84 @@
+name: Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+      push_to_marketplace:
+        description: 'Push to marketplace after release'
+        type: boolean
+        default: false
+
+jobs:
+  init_dependencies:
+    uses: ./.github/workflows/init.yml
+    with:
+      version: ${{ inputs.version }}
+      workflow_type: 'release'
+
+  build:
+    needs: [init_dependencies]
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version }}
+      environment: production
+    secrets:
+      AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      DEV_IMAGE_NAME: ${{ secrets.DEV_IMAGE_NAME }}
+      PROD_IMAGE_NAME: ${{ secrets.PROD_IMAGE_NAME }}
+      ELECTRON_S3_BUCKET: ${{ secrets.ELECTRON_S3_BUCKET }}
+      APPLE_CSC_SECRET_NAME: ${{ secrets.APPLE_CSC_SECRET_NAME }}
+
+  deploy:
+    needs: [build]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ inputs.version }}
+      workflow_type: 'release'
+    secrets: inherit
+
+  create_release:
+    needs: [deploy]
+    uses: ./.github/workflows/create-release.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pre_marketplace:
+    needs: [deploy]
+    uses: ./.github/workflows/pre_marketplace.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+
+  marketplace_push:
+    needs: [pre_marketplace]
+    if: ${{ inputs.push_to_marketplace }}
+    uses: ./.github/workflows/marketplace_push.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      AWS_OIDC_ROLE_STAGING_ARN: ${{ secrets.AWS_OIDC_ROLE_STAGING_ARN }}
+      AWS_OIDC_ROLE_MARKETPLACE_ARN: ${{ secrets.AWS_OIDC_ROLE_MARKETPLACE_ARN }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      MARKETPLACE_STAGING_REPO_NAME: ${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}
+      AWS_MARKETPLACE_PRODUCT_NAME: ${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}
+      AWS_MARKETPLACE_REPO_NAME: ${{ secrets.AWS_MARKETPLACE_REPO_NAME }}
+      MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL }}
+
+  notify:
+    needs: [create_release, pre_marketplace]
+    uses: ./.github/workflows/notify.yml
+    with:
+      version: ${{ inputs.version }}
+      environment: production
+    secrets:
+      MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL }}
+      MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}

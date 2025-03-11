@@ -2,6 +2,26 @@ name: Push to Marketplace
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      AWS_OIDC_ROLE_STAGING_ARN:
+        required: true
+      AWS_OIDC_ROLE_MARKETPLACE_ARN:
+        required: true
+      AWS_DEFAULT_REGION:
+        required: true
+      MARKETPLACE_STAGING_REPO_NAME:
+        required: true
+      AWS_MARKETPLACE_PRODUCT_NAME:
+        required: true
+      AWS_MARKETPLACE_REPO_NAME:
+        required: true
+      MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL:
+        required: true
 
 jobs:
   push_to_marketplace:
@@ -13,12 +33,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get version from package.json
-        id: get-version
+      - name: Set version
         run: |
-          VERSION=$(node -e "console.log(require('./package.json').version);")
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Version: $VERSION"
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          echo "Version: ${{ inputs.version }}"
 
       - name: Configure AWS credentials for staging
         id: aws-credentials-staging
