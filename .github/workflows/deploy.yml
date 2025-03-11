@@ -32,24 +32,51 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION  }}
           role-session-name: GitHubActions-${{ github.event.repository.name }}-${{ github.run_id }}
 
-      - name: Force new deployment of ECS service
+      - name: Get Short Commit SHA
+        id: get-sha
         run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD || echo "${GITHUB_SHA:0:7}")
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "Using short commit SHA: ${COMMIT_SHA}"
+
+      - name: Update CloudFormation Stack
+        run: |
+          # Get AWS Account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
           # Set environment-specific variables
           if [[ "${{ inputs.environment }}" == "production" ]]; then
-            CLUSTER_NAME="${{ secrets.PROD_ECS_CLUSTER_NAME }}"
-            SERVICE_NAME="${{ secrets.PROD_ECS_SERVICE_NAME }}"
+            IMAGE_NAME="${{ secrets.PROD_IMAGE_NAME }}"
+            STACK_NAME="${{ secrets.PROD_STACK_NAME }}"
           else
-            CLUSTER_NAME="${{ secrets.DEV_ECS_CLUSTER_NAME }}"
-            SERVICE_NAME="${{ secrets.DEV_ECS_SERVICE_NAME }}"
+            IMAGE_NAME="${{ secrets.DEV_IMAGE_NAME }}"
+            STACK_NAME="${{ secrets.DEV_STACK_NAME }}"
           fi
 
-          echo "Forcing new deployment for cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
+          # Construct container image URL with commit SHA
+          CONTAINER_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${IMAGE_NAME}:${{ steps.get-sha.outputs.COMMIT_SHA }}"
 
-          # Force new deployment of ECS service
-          aws ecs update-service \
-            --cluster $CLUSTER_NAME \
-            --service $SERVICE_NAME \
-            --force-new-deployment \
+          echo "Constructing parameters list for stack update..."
+
+          # Build parameters list dynamically
+          paramslist=""
+          for paramval in $(aws cloudformation describe-stacks --stack-name specif-ai-dev --query "Stacks[].Parameters[].ParameterKey" --output text)
+          do
+              if [ "$paramval" == "ContainerImage" ]
+              then
+                  paramslist+="ParameterKey=${paramval},ParameterValue=${CONTAINER_IMAGE} "
+              else
+                  paramslist+="ParameterKey=${paramval},UsePreviousValue=true "
+              fi
+          done
+
+          echo "Updating CloudFormation stack with new container image: $CONTAINER_IMAGE"
+
+          # Update stack with dynamic parameters
+          aws cloudformation update-stack \
+            --stack-name $STACK_NAME \
+            --use-previous-template \
+            --parameters $paramslist \
             --region ${{ secrets.AWS_DEFAULT_REGION }} > /dev/null
 
-            echo "✅ Deployment triggered successfully"
+          echo "✅ Stack update initiated successfully"
