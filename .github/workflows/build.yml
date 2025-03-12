@@ -231,6 +231,9 @@ jobs:
           cd electron
           npm install
           npm run package:mac
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
       - name: Package and Upload to S3
         id: package_and_upload
