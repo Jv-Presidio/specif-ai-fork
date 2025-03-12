@@ -68,6 +68,8 @@ jobs:
       PROD_IMAGE_NAME: ${{ secrets.PROD_IMAGE_NAME }}
       ELECTRON_S3_BUCKET: ${{ secrets.ELECTRON_S3_BUCKET }}
       APPLE_CSC_SECRET_NAME: ${{ secrets.APPLE_CSC_SECRET_NAME }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
   deploy:
     needs: [determine_workflow, build]
