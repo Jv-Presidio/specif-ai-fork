@@ -224,7 +224,7 @@ jobs:
 
       - name: Copy Frontend to Electron Directory
         run: |
-          cp -r ui/dist/ electron/
+          cp -r ui/dist/ui electron/
 
       - name: Install Dependencies and Build Electron
         run: |
