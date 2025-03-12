@@ -93,7 +93,4 @@ jobs:
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
       environment: ${{ needs.determine_workflow.outputs.environment }}
-    secrets:
-      MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_DEV_CHANNEL_WEBHOOK_URL }}
-      MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_PROD_CHANNEL_WEBHOOK_URL }}
-      GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+    secrets: inherit
