@@ -170,7 +170,7 @@ jobs:
 
   build_electron_mac:
     needs: [build_frontend]
-    runs-on: macos-latest
+    runs-on: macos-runner
     permissions:
       id-token: write
       contents: read
