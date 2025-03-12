@@ -118,6 +118,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Get Short Commit SHA
+        id: get-sha
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD || echo "${GITHUB_SHA:0:7}")
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "Using short commit SHA: ${COMMIT_SHA}"
+
       - name: Configure AWS credentials
         id: aws-credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -163,7 +170,7 @@ jobs:
           Compress-Archive -Path dist/win-unpacked/* -DestinationPath win-unpacked.zip
 
           # Upload to S3 for long-term storage
-          aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ inputs.environment }}/windows/$VERSION/win-unpacked.zip
+          aws s3 cp win-unpacked.zip s3://${{ secrets.ELECTRON_S3_BUCKET }}/github-actions/${{ inputs.environment }}/windows/$VERSION/${{steps.get-sha.outputs.COMMIT_SHA}}/win-unpacked.zip
 
       - name: Upload Windows Build as GitHub Artifact
         uses: actions/upload-artifact@v4
@@ -181,6 +188,13 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Get Short Commit SHA
+        id: get-sha
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD || echo "${GITHUB_SHA:0:7}")
+          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "Using short commit SHA: ${COMMIT_SHA}"
 
       - name: Configure AWS credentials
         id: aws-credentials
@@ -254,8 +268,8 @@ jobs:
           echo "ARM_DMG=$ARM_DMG" >> $GITHUB_ENV
 
           # Upload to S3 for long-term storage
-          aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ inputs.environment }}/darwin/$VERSION/intel/$(basename "$INTEL_DMG")"
-          aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/${{ inputs.environment }}/darwin/$VERSION/arm64/$(basename "$ARM_DMG")"
+          aws s3 cp "$INTEL_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/github-actions/${{ inputs.environment }}/darwin/$VERSION/intel/${{steps.get-sha.outputs.COMMIT_SHA}}/$(basename "$INTEL_DMG")"
+          aws s3 cp "$ARM_DMG" "s3://${{ secrets.ELECTRON_S3_BUCKET }}/github-actions/${{ inputs.environment }}/darwin/$VERSION/arm64/${{steps.get-sha.outputs.COMMIT_SHA}}/$(basename "$ARM_DMG")"
 
       - name: Upload macOS Intel Build as GitHub Artifact
         uses: actions/upload-artifact@v4

@@ -54,8 +54,7 @@ jobs:
           fi
 
           # Construct container image URL with commit SHA
-          CONTAINER_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${IMAGE_NAME}:${{ steps.get-sha.outputs.COMMIT_SHA }}"
-
+          CONTAINER_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${{secrets.AWS_DEFAULT_REGION}}.amazonaws.com/${IMAGE_NAME}:${{ inputs.environment == 'production' && inputs.version || steps.get-sha.outputs.COMMIT_SHA }}"
           echo "Constructing parameters list for stack update..."
 
           # Build parameters list dynamically
