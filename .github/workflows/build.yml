@@ -120,10 +120,14 @@ jobs:
 
       - name: Get Short Commit SHA
         id: get-sha
+        shell: pwsh
         run: |
-          COMMIT_SHA=$(git rev-parse --short HEAD || echo "${GITHUB_SHA:0:7}")
-          echo "COMMIT_SHA=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-          echo "Using short commit SHA: ${COMMIT_SHA}"
+          $COMMIT_SHA = (git rev-parse --short HEAD) 2>$null
+          if (-not $COMMIT_SHA) {
+            $COMMIT_SHA = $env:GITHUB_SHA.Substring(0,7)
+          }
+          echo "COMMIT_SHA=$COMMIT_SHA" >> $env:GITHUB_OUTPUT
+          echo "Using short commit SHA: $COMMIT_SHA"
 
       - name: Configure AWS credentials
         id: aws-credentials
