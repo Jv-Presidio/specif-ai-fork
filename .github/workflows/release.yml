@@ -85,29 +85,6 @@ jobs:
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
 
-  pre_marketplace:
-    needs: [determine_workflow, deploy]
-    if: ${{ needs.determine_workflow.outputs.workflow_type == 'release' }}
-    uses: ./.github/workflows/pre_marketplace.yml
-    with:
-      version: ${{ needs.determine_workflow.outputs.version }}
-    secrets: inherit
-
-  marketplace_push:
-    needs: [determine_workflow, pre_marketplace]
-    if: ${{ needs.determine_workflow.outputs.workflow_type == 'release' && github.event.inputs.push_to_marketplace == 'true' }}
-    uses: ./.github/workflows/marketplace_push.yml
-    with:
-      version: ${{ needs.determine_workflow.outputs.version }}
-    secrets:
-      AWS_OIDC_ROLE_STAGING_ARN: ${{ secrets.AWS_OIDC_ROLE_STAGING_ARN }}
-      AWS_OIDC_ROLE_MARKETPLACE_ARN: ${{ secrets.AWS_OIDC_ROLE_MARKETPLACE_ARN }}
-      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-      MARKETPLACE_STAGING_REPO_NAME: ${{ secrets.MARKETPLACE_STAGING_REPO_NAME }}
-      AWS_MARKETPLACE_PRODUCT_NAME: ${{ secrets.AWS_MARKETPLACE_PRODUCT_NAME }}
-      AWS_MARKETPLACE_REPO_NAME: ${{ secrets.AWS_MARKETPLACE_REPO_NAME }}
-      MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL: ${{ secrets.MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL }}
-
   notify:
     needs:
       - determine_workflow
