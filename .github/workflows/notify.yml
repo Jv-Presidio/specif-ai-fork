@@ -121,16 +121,19 @@ jobs:
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Windows Build\",
                           \"url\": \"$WINDOWS_URL\"
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/888/888882.png\"
                         },
                         {
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Mac Intel Build\",
                           \"url\": \"$MACOS_INTEL_URL\"
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
                         },
                         {
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Mac ARM64 Build\",
                           \"url\": \"$MACOS_ARM64_URL\"
+                          \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
                         }
                       ]
                     }
@@ -183,7 +186,7 @@ jobs:
                         },
                         {
                           title: "Repository",
-                          value: ("OfficialPresidioAccount - ECR - " + $repo)
+                          value: ("Official Presidio Account - ECR - " + $repo)
                         }
                       ]
                     }
@@ -210,9 +213,6 @@ jobs:
           echo "Preparing release notification for v${BUILD_VERSION}"
 
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/v${BUILD_VERSION}"
-
-          # Fetch random celebration GIF
-          RANDOM_GIF=$(curl -s "https://api.giphy.com/v1/gifs/random?api_key=${{secrets.GIPHY_API_KEY}}&tag=celebration+success&rating=g" | jq -r '.data.images.original.webp')
 
           # Process changelog
           CHANGELOG_CONTENT=$(sed -n "/## \[$BUILD_VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
@@ -279,15 +279,9 @@ jobs:
                     },
                     {
                       \"type\": \"TextBlock\",
-                      \"text\": \"🎉 A new release is ready for download!\",
+                      \"text\": \"✅ A new release is ready for download!\",
                       \"wrap\": true,
                       \"size\": \"Medium\"
-                    },
-                    {
-                      \"type\": \"Image\",
-                      \"url\": \"$RANDOM_GIF\",
-                      \"horizontalAlignment\": \"center\",
-                      \"size\": \"Large\"
                     },
                     {
                       \"type\": \"TextBlock\",

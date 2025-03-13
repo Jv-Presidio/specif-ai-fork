@@ -105,7 +105,7 @@ jobs:
         with:
           push: true
           tags: |
-            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ inputs.environment == 'production' && secrets.PROD_IMAGE_NAME || secrets.DEV_IMAGE_NAME }}:${{ inputs.environment == 'production' && inputs.version || steps.get-sha.outputs.COMMIT_SHA }}
+            ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ inputs.environment == 'production' && secrets.PROD_IMAGE_NAME || secrets.DEV_IMAGE_NAME }}:${{ inputs.environment == 'production' && inputs.version || format('{0}-{1}', inputs.version, steps.get-sha.outputs.COMMIT_SHA) }}
             ${{ steps.get-aws-account.outputs.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ inputs.environment == 'production' && secrets.PROD_IMAGE_NAME || secrets.DEV_IMAGE_NAME }}:latest
 
   build_electron_windows:

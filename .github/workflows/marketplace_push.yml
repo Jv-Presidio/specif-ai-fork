@@ -17,13 +17,6 @@ jobs:
     outputs:
       version: ${{ steps.get-version.outputs.version }}
     steps:
-      - name: Configure AWS credentials for production
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
-          role-session-name: GitHubActions-prod-${{ github.run_id }}
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -43,26 +36,40 @@ jobs:
           echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
           echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
 
+      # First AWS credential configuration for production
+      - name: Configure AWS credentials for production
+        id: prod-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+          role-session-name: GitHubActions-prod-${{ github.run_id }}
+
+      # Get production account ID and pull image
+      - name: Pull from Production ECR
+        run: |
+          PROD_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          echo "PROD_ACCOUNT_ID=${PROD_ACCOUNT_ID}" >> $GITHUB_ENV
+
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | \
+            docker login --username AWS --password-stdin ${PROD_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+
+          docker pull ${PROD_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.PROD_IMAGE_NAME }}:${VERSION}
+
+      # Switch to marketplace credentials
       - name: Configure AWS credentials for marketplace
+        id: marketplace-credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_MARKETPLACE_ARN }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
           role-session-name: GitHubActions-marketplace-${{ github.run_id }}
 
+      # Push to marketplace with new credentials
       - name: Push to Marketplace ECR
         run: |
-          # Get account IDs
-          PROD_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
           MARKETPLACE_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
-          # Pull from production ECR
-          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | \
-            docker login --username AWS --password-stdin ${PROD_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
-
-          docker pull ${PROD_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/${{ secrets.PROD_IMAGE_NAME }}:${VERSION}
-
-          # Push to marketplace ECR
           aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | \
             docker login --username AWS --password-stdin ${MARKETPLACE_ACCOUNT_ID}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
 
