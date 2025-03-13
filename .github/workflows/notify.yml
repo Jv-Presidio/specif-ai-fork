@@ -17,8 +17,6 @@ on:
         required: true
       MS_TEAMS_MARKETPLACE_CHANNEL_WEBHOOK_URL:
         required: true
-      GIPHY_API_KEY:
-        required: true
       AWS_MARKETPLACE_PRODUCT_NAME:
         required: false
       AWS_MARKETPLACE_REPO_NAME:
