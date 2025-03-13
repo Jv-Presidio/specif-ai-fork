@@ -118,19 +118,19 @@ jobs:
                         {
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Windows Build\",
-                          \"url\": \"$WINDOWS_URL\"
+                          \"url\": \"$WINDOWS_URL\",
                           \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/888/888882.png\"
                         },
                         {
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Mac Intel Build\",
-                          \"url\": \"$MACOS_INTEL_URL\"
+                          \"url\": \"$MACOS_INTEL_URL\",
                           \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
                         },
                         {
                           \"type\": \"Action.OpenUrl\",
                           \"title\": \"Mac ARM64 Build\",
-                          \"url\": \"$MACOS_ARM64_URL\"
+                          \"url\": \"$MACOS_ARM64_URL\",
                           \"iconUrl\": \"https://cdn-icons-png.flaticon.com/512/2/2235.png\"
                         }
                       ]
