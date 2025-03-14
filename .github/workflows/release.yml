@@ -57,10 +57,10 @@ jobs:
 
   build:
     needs: [determine_workflow, init_dependencies]
+    uses: ./.github/workflows/build.yml
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
       environment: ${{ needs.determine_workflow.outputs.environment }}
@@ -76,10 +76,10 @@ jobs:
 
   deploy:
     needs: [determine_workflow, build]
+    uses: ./.github/workflows/deploy.yml
     permissions:
       id-token: write
       contents: read
-    uses: ./.github/workflows/deploy.yml
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
       workflow_type: ${{ needs.determine_workflow.outputs.workflow_type }}
@@ -90,6 +90,8 @@ jobs:
     needs: [determine_workflow, deploy]
     if: ${{ needs.determine_workflow.outputs.workflow_type == 'release' }}
     uses: ./.github/workflows/create-release.yml
+    permissions:
+      contents: write
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
 
@@ -98,6 +100,9 @@ jobs:
       - determine_workflow
       - deploy
     uses: ./.github/workflows/notify.yml
+    permissions:
+      actions: read
+      contents: read
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
       environment: ${{ needs.determine_workflow.outputs.environment }}
