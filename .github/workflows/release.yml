@@ -57,6 +57,9 @@ jobs:
 
   build:
     needs: [determine_workflow, init_dependencies]
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
@@ -73,6 +76,9 @@ jobs:
 
   deploy:
     needs: [determine_workflow, build]
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/deploy.yml
     with:
       version: ${{ needs.determine_workflow.outputs.version }}
